@@ -58,8 +58,8 @@ endif()
 message("Compiling with: ${CMAKE_CXX_COMPILER_ID}")
 
 
-file(GLOB_RECURSE FTPL_SOURCES "*.cpp")
-file(GLOB_RECURSE FTPL_HEADERS "*.hpp")
+file(GLOB_RECURSE FTPL_SOURCES "source/*.cpp")
+file(GLOB_RECURSE FTPL_HEADERS "source/*.hpp")
 
 set (FTPL_INCLUDE_DIRS "")
 foreach (_headerFile ${FTPL_HEADERS})
@@ -69,6 +69,6 @@ endforeach()
 list(REMOVE_DUPLICATES FTPL_INCLUDE_DIRS)
 
 include_directories(${FTPL_INCLUDE_DIRS})
-add_executable(FTPL main.cpp ${FTPL_SOURCES})
+add_executable(FTPL ${FTPL_SOURCES})
 
 #target_compile_options(EMC PUBLIC -std=c++14 -fopenmp -Wall -Wfloat-conversion -O3 -march=native -mno-avx -Wno-deprecated-declarations -DEIGEN_NO_DEBUG -DNDEBUG)

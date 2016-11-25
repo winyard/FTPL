@@ -6,24 +6,9 @@
 #ifndef FTPL_H_
 #define FTPL_H_
 
-#define _USE_MATH_DEFINES // windows crap
-
 #include <cmath>
+#include "FieldTheories.hpp"
 
-#include "Exceptions.hpp"
-#include "Types.hpp"
-#include "IntensityTransformations.hpp"
-#ifdef USE_GTK
-#include <gtk/gtk.h>
-#include <gdk-pixbuf/gdk-pixbuf.h>
-#endif
-#include <fstream>
-#include <typeinfo>
-#include <string>
-#include <stdlib.h>
-#include <map>
-#include <iostream>
-#include <fstream>
 using namespace std;
 
 namespace FTPL {
@@ -32,7 +17,7 @@ class BabySkyrmeModel : public BaseFieldTheory {
     public:
 	//required functions
         BabySkyrmeModel(const char * filepath);
-        BabySkyrmeModel(unsigned int width, unsigned int height);
+        BabySkyrmeModel(unsigned int width, unsigned int height): f(width,height);
         BabySkyrmeModel(BabySkyrmeField * otherBabySkyrmeField, Transformation T = IntensityTransformation(DEFAULT));//Allows you to act with a transformation (rotation, isorotation etc.)
         void save(const char * filename);
 	//The maths
@@ -46,14 +31,14 @@ class BabySkyrmeModel : public BaseFieldTheory {
 	// parameters and fields
 	float2 spacing;
 	float mu, mpi;
-	Field f;
+	Field<Eigen::VectorXd<double,3>> f;
 };
 
 
-BabySkyrmeModel::BabySkyrmeModel(unsigned int width, unsigned int height){
-	Eigen::VectorXd<int> sizein(2) = (width, height);
+BabySkyrmeModel::BabySkyrmeModel(unsigned int width, unsigned int height): f(width,height){
+	vector<int> sizein = (width, height);
 	BaseFieldTheory(2,sizein);
-	this->f = this->createField(field<Eigen::VectorXd<float,3>>(2,(Eigen::VectorXd)[0,0,1],sizein)
+	f = createField(field<Eigen::VectorXd<float,3>>(2,(Eigen::VectorXd)[0,0,1],sizein);
 };
 
 

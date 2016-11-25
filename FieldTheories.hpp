@@ -11,19 +11,17 @@
 #include <cmath>
 
 #include "Exceptions.hpp"
-#include "Types.hpp"
-#include "IntensityTransformations.hpp"
-#ifdef USE_GTK
-#include <gtk/gtk.h>
-#include <gdk-pixbuf/gdk-pixbuf.h>
-#endif
 #include <fstream>
 #include <typeinfo>
 #include <string>
 #include <stdlib.h>
 #include <map>
 #include <iostream>
-#include <fstream>
+#include <vector>
+#include <memory>
+#include <Eigen/Dense>
+
+
 using namespace std;
 
 namespace FTPL {
@@ -39,168 +37,137 @@ class BaseField {
 template <class T>
 class Field {
     public:
-	int dim;
-        Field(int d, ...);
-	Field(int d, vector<int> size);
-	Field(int d,T value, vector<int> size);
+	    int dim;
+		Field(int d, vector<int> size, T value = NULL);
         ~Field();
-        const T * getData();
-        const T getData(...);
+		T operator()(...);
+        const vector<T> getData();
         const T getData(vector<int> pos);
         vector<int> getSize();
+        int getSize(int com);
         int getTotalSize();
-        void setData(T * datain);
-	void setData(T, ...);
-	void setData(T, vector<int> pos);
+        void setData(vector<T> datain);
+		void setData(T, vector<int> pos);
         void fill(T value);
+		void save(ofstream output);
+		void load(ifstream input);
+		void normalise();
     protected:
-        // T * data;
-	//int * size;
         vector<T> data;
-	vector<int>  size;
-	
-
+		vector<int>  size;
 };
 
 /* --- Constructors & Destructors --- */
-template <class T>
-Field<T>::Field(int d, ...): dim(d) {
-    dim = d;
-    size = new int[d];
-    va_list ap;
-    va_start(ap, d);
-    for(int i=0; i<d; i++){
-    	this->size[i] = va_arg(ap,int);
-    }
-    this->data = new T[this->getTotalSize()];
-    this->clearField;
-}
-Eigen::ArrayXXi
 
 template <class T>
-Field<T>::Field(int d, vector<int> sizein): dim(d), size(sizein)  {
+Field<T>::Field(int d, vector<int> sizein, T value = NULL): dim(d), size(sizein)  {
     data.resize(getTotalSize());
-    clearField;
-}
-
-template <class T>
-Field<T>::Field(int d,T value, Eigen::VectorXd<int> size) {
-    this->dim = d;
-    this->size = new int[d];
-    for(int i=0; i<d; i++){
-    	this->size[i] = size(i+1);
-    }
-    this->data = new T[this->getTotalSize()];
-    this->fill(value);
-}
-
-template <class T>
-Field<T>::Field(int d,T value, ...) {
-    this->dim = d;
-    this->size = new int[d];
-    va_list ap;
-    va_start(ap, d);
-    for(int i=0; i<d; i++){
-    	this->size[i] = va_arg(ap,int);
-    }
-    this->data = new T[this->getTotalSize()];
-    this->fill(value);
-}
-
-template <class T>
-Field<T>::~Field() {
-	delete[] this->data;
-	delete[] this->size;
+	if(value){
+		fill(value);
+	}
 }
 
 /* --- Fetch & Set --- */
 
 template <class T>
-const T * Field<T>::getData() {
-    return this->data;
+const vector<T> Field<T>::getData() {
+    return data;
 }
 
+
 template <class T>
-const T * Field<T>::getData(...) {
+T Field<T>::operator()(...){ // can be optimised better!
     va_list ap;
-    va_start(ap, this->dim);
+    va_start(ap, dim);
     int point=0;
-    for(int i=0; i<this->dim; i++){
-    	int localpoint = va_arg(ap,int);
-	for(int j=0; j<i; j++){
-		localpoint *= size[j];
-	}
-    	point += localpoint;	
+    int localpoint;
+    for(int i=0; i<dim; i++){
+        localpoint = va_arg(ap,int);
+        for(int j=0; j<i; j++){
+            localpoint *= size[j];
+        }
+        point += localpoint;
     }
-    return this->data[point];
+    return data[point];
 }
 
 template <class T>
-const T * Field<T>::getData(Eigen::VectorXd<int> pos) {
+const T Field<T>::getData(vector<int> pos) {// can be optimised better! - similar to above method
     int point=0;
-    for(int i=0; i<this->dim; i++){
+    for(int i=0; i<dim; i++){
     	int localpoint = pos[i];
 	for(int j=0; j<i; j++){
 		localpoint *= size[j];
 	}
     	point += localpoint;	
     }
-    return this->data[point];
+    return data[point];
 }
 
 
 template <class T>
-void Field<T>::setData(T * datain){
-    this->data = datain;
+void Field<T>::setData(vector<T> datain){
+    data = datain;
 }
 
 template <class T>
-void Field<T>::setData(T value, ...){
-    va_list ap;
-    va_start(ap, this->dim);
+void Field<T>::setData(T value, vector<int> pos){
     int point=0;
-    for(int i=0; i<this->dim; i++){
-    	int localpoint = va_arg(ap,int);
-	for(int j=0; j<i; j++){
-		localpoint *= size[j];
-	}
-    	point += localpoint;	
-    }
-    this->data[point] = value;
-}
-        
-template <class T>
-void Field<T>::setData(T value, Eigen::VectorXd<int> pos){
-    int point=0;
-    for(int i=0; i<this->dim; i++){
+    for(int i=0; i<dim; i++){
     	int localpoint = pos[i];
 	for(int j=0; j<i; j++){
 		localpoint *= size[j];
 	}
     	point += localpoint;	
     }
-    this->data[point] = value;
+    data[point] = value;
 }
 
 template <class T>
 void Field<T>::fill(T value){
-    for(int i=0; i<this->getTotalSize(); i++){
-    this->data[i] = value;
+    for(int i=0; i<getTotalSize(); i++){
+    data[i] = value;
     }
 }
 
 template <class T>
-int * Field<T>::getSize(){
-    return this->size;
+vector<int> Field<T>::getSize(){
+    return size;
+}
+
+template <class T>
+int Field<T>::getSize(int com){
+	return size[com];
 }
 
 template <class T>
 int Field<T>::getTotalSize(){
     int total = size[0];
-    for(int i=1; i<this->dim; i++){
+    for(int i=1; i<dim; i++){
 	total *= size[i];
     }
     return total;
+}
+
+template <class T>
+void Field<T>::load(ifstream input){ // may need to be altered for various spaces! - not sure!
+	for(int i=0; i < getTotalSize(); i++){
+		input >> data[i];
+	}
+}
+
+template <class T>
+void Field<T>::save(ofstream output){ // may need to be altered for various spaces! - not sure!
+	for(int i=0; i < getTotalSize(); i++){
+		output << data[i] << "\n";
+	}
+}
+
+template <class T>
+void Field<T>::normalise(){
+	for(int i=0; i < getTotalSize(); i++){
+		data[i] = data[i].normalise();
+	}
 }
 
 /***********************/
@@ -210,167 +177,146 @@ int Field<T>::getTotalSize(){
 class BaseFieldTheory {
    public:
 	int dim;
-	BaseFieldTheory(); // NOTE - the derived class must set the dimensions before allowing the constrcutor to be called!
+	BaseFieldTheory(int d, vector<int> size);
 	~BaseFieldTheory(); // Deletes all data including fields etc. so only "new's" that have allocated data (which you shouldnt be doing) need to be deleted in derived destructor
-	save(); // will save and load all fields and parameters.
-	load();
-	plot(); // will plot fields or energies on a flat spatial grid
-	spaceTransformation(); // tranform the physical space using spaitial rotations and scalings etc.
-	fieldTransformation(); // transform a target space by some class T (normally some matrix or something)
-	setBoundaryType(); // set the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic 
+	void save(const char * savepath); // will save and load all fields and parameters.
+	void load(const char * loadpath);
+	void plot(const char * plotpath); // will plot fields or energies on a flat spatial grid
+	void spaceTransformation(); // tranform the physical space using spaitial rotations and scalings etc.
+    template <class T>
+	void fieldTransformation(T tranformation); // transform a target space by some class T (normally some matrix or something)
+	void setBoundaryType(vector<int> boundaryin); // set the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
 	void updateEnergy(); // cycles through with correct boundary condtions and calculates the energy at each point from the derived classes energy functional
-	void gradientFlow(int iterations, T functionto be run after each iteration); // cycle through with correct boundary condtions and updates each point based on the derived classes energy gradient calculation
-	virtual float calculateEnergy(...); // need to be overriden by derived class with correct pointwise energy calculation
+    template<class T>
+	void gradientFlow(int iterations, T functiontoberunaftereachiteration = NULL); // cycle through with correct boundary condtions and updates each point based on the derived classes energy gradient calculation
+    template <class T>
+    virtual T calculateGradientFlow(Field<T> select_field,...);
+    template <class T>
+    virtual T calculateEnergy(...); // need to be overriden by derived class with correct pointwise energy calculation
+    bool inBoundary(...);
+    int getTotalSize();
 	template <class T>
 	virtual T single_derivative(Field<T> * f, int wrt, ...);
 	template <class T>
-	virtual T single_derivative(Field<T> * f, int wrt, Eigen::VectorXd<int> pos);
+	virtual T single_derivative(Field<T> * f, int wrt, vector<int> pos);
 	template <class T>
 	virtual T double_derivative(Field<T> * f, int wrt1, int wrt2, ...);
 	template <class T>
-	virtual T double_derivative(Field<T> * f, int wrt1, int wrt2, Eigen::VectorXd<int> pos);
+	virtual T double_derivative(Field<T> * f, int wrt1, int wrt2, vector<int> pos);
    protected:
 	template <class T>
-	Field * createField(T type);
-	Field ** fields; // pointer towards the fields of the theory so they can be interacted with (but need to know how many fields we are dealing with!)
-	int No_fields;
-	int * bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
-	int * boundarytype; // indicates the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic 
-	float * energydensity;
-	float energy;
-	float * spacing;
-	int * size;
+	Field<T> * createField(T type);
+	//vector<unique_ptr<Field>> fields;
+    template<class T>
+    vector<Field<T> *> fields;
+	vector<int> bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
+	vector<int> boundarytype; // indicates the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
+	vector<double> energydensity;
+	double energy;
+	vector<double> spacing;
+	vector<int> size;
 };
 
 /* --- Constructors & Destructors --- */
-BaseFieldTheory::BaseFieldTheory(int d, ...){
-	this->dim = d;
-	this->size = new int[d];
-	va_list ap;
-    	va_start(ap, d);
-   	for(int i=0; i<d; i++){
-    	size[i] = va_arg(ap,int);
-    	}
-	BaseFieldTheory();
-};
-
-
-
-BaseFieldTheory::BaseFieldTheory(int d, int * size){
-	this->dim = d;
-	this->size = new int[d];
-   	for(int i=0; i<d; i++){
-    	size[i] = size(i+1);
-    	}
-	BaseFieldTheory();
-};
-
-BaseFieldTheory::BaseFieldTheory(){
-	// this should be run once dim and size are set!
-	this->No_fields = 0;
-	this->energydensity = new float[this->getTotalSize()];
-	this->energy = -1.0;
-	// set deault spacing of dx = 1	
-	this->spacing = new float[this->dim];
-	for(int i =0; i<this->dim; i++){
-	spacing[i] = 1.0;
-	}
-	//set default boundary conditions (standard 2 layer static boundary)
-	this->bdw = new int[2*this->dim];
-	this->boundarytype = new int[2*this->dim];
-	for(int i =0; i<this->dim; i++){
-	this->bdw[2*i] = 2; // set the +ve boundary
-	this->bdw[2*i+1] = 2; // set the -ve boundary
-	this->boundarytype[2*i] = 2; // set the +ve boundary
-	this->boundarytype[2*i+1] = 2; // set the -ve boundary
-	};
-	
+BaseFieldTheory::BaseFieldTheory(int d, vector<int> sizein): dim(d), size(sizein){
+        energydensity.resize(getTotalSize());
+        energy = -1.0;
+        // set deault spacing of dx = 1
+        spacing.resize(dim);
+        for(int i =0; i<dim; i++){
+            spacing[i] = 1.0;
+        }
+        //set default boundary conditions (standard 2 layer static boundary)
+        bdw.resize(2*dim);
+        boundarytype.resize(2*dim);
+        for(int i =0; i<dim; i++){
+            bdw[2*i] = 2; // set the +ve boundary
+            bdw[2*i+1] = 2; // set the -ve boundary
+            boundarytype[2*i] = 0; // set the +ve boundary
+            boundarytype[2*i+1] = 0; // set the -ve boundary
+        };
 };
 
 template <class T>
 Field<T> * BaseFieldTheory::createField(T type){
-		
-	No_fields += 1;
-	
-
-
-
-
+    fields.emplace_back(new Field<type>(dim, size));
+    return fields[fields.size()-1];
 };
 
-
-
-BaseFieldTheory::~BaseFieldTheory(){
-	delete[] size;
-	delete[] energydensity;
-	delete[] spacing;
-};
+int BaseFieldTheory::getTotalSize(){
+    int total = size[0];
+    for(int i=1; i<dim; i++){
+        total *= size[i];
+    }
+    return total;
+}
 
 /* --- Derivatives --- */
 
 template <class T>
 T BaseFieldTheory::single_derivative(Field<T> * f, int wrt, Eigen::VectorXd<int> pos) {
-	Eigen::VectorXd<int> dir(this->dim);
-	for(int i = 1; i <= this->dim; i++){ if(i == wrt){dir(i) = 1;}else{dir(i) = 0;}};
-	return (-1.0*f.getData(pos+2*dir) + 8.0*f.getData(pos+dir) - 8.0*f.getData(pos-dir) + f.getData(pos-2*dir))/(12.0*this->spacing[wrt]);
+    Eigen::VectorXd dir(dim);
+	for(int i = 0; i < dim; i++){ if(i == wrt){dir[i] = 1;}else{dir[i] = 0;}};
+	return (-1.0*f.getData(pos+2*dir) + 8.0*f.getData(pos+dir) - 8.0*f.getData(pos-dir) + f.getData(pos-2*dir))/(12.0*spacing[wrt]);
 }
 
 template <class T>
-T BaseFieldTheory::single_derivative(Field<T> * f, int wrt, ...) {
-	Eigen::VectorXd<int> pos(this->dim);
+T BaseFieldTheory::single_derivative(const Field<T> f, int wrt, ...) {
+    Eigen::VectorXd<int> pos(dim);
    	va_list ap;
-    	va_start(ap, this->dim);
-   	for(int i=1; i<=d; i++){
+    	va_start(ap, dim);
+   	for(int i=0; i<dim; i++){
     	pos[i] = va_arg(ap,int);
     	}
-	return this->single_derivative(f, wrt, pos);
+	return single_derivative(f, wrt, pos);
 }
 
 
 
 template <class T>
-T BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, Eigen::VectorXd<int> pos) {
+T BaseFieldTheory::double_derivative(const Field<T> f, int wrt1, int wrt2, Eigen::VectorXd<int> pos) {
 	if(wr1 == wrt2)
 	{
-	Eigen::VectorXd<int> dir(this->dim);
-	for(int i = 1; i <= this->dim; i++){ if(i == wrt){dir(i) = 1;}else{dir(i) = 0;}};
-	return (-1.0*f.getData(pos+2*dir) + 16.0*f.getData(pos+dir) - 30.0*f.getData(pos) + 16.0*f.getData(pos-dir) - f.getData(pos-2*dir))/(12.0*this->spacing[wrt1]*this->spacing[wrt1]);
+        Eigen::VectorXd<int> dir(dim);
+	    for(int i = 0; i <= dim; i++){ if(i == wrt){dir[i] = 1;}else{dir[i] = 0;}};
+	    return (-1.0*f.getData(pos+2*dir) + 16.0*f.getData(pos+dir) - 30.0*f.getData(pos) + 16.0*f.getData(pos-dir) - f.getData(pos-2*dir))/(12.0*this->spacing[wrt1]*this->spacing[wrt1]);
 	}
 	else
 	{
-	Eigen::VectorXd<int> dir1(this->dim);
-	Eigen::VectorXd<int> dir2(this->dim);
-	for(int i = 1; i <= this->dim; i++){ 
-		if(i == wrt1){dir1(i) = 1;}else{dir1(i) = 0;}
-		if(i == wrt2){dir2(i) = 1;}else{dir2(i) = 0;}
-	};
-	return (f.getData(pos+2*dir1+2*dir2) - 8.0*f.getData(pos+dir1+2*dir2) + 8.0*f.getData(pos-dir1+2*dir2) - f.getData(pos-2*dir1+2*dir2) - 8.0*f.getData(pos+2*dir1+dir2) +64.0*f.getData(pos+dir1+dir2) -64.0*f.getData(pos-dir1+dir2) + 8.0* f.getData(pos-2*dir1+dir2) + 8.0*f.getData(pos+2*dir1-dir2) - 64.0*f.getData(pos+dir1-dir2)+64.0*f.getData(pos-dir1-dir2) - 8.0*f.getData(pos-2*dir1-dir2) - f.getData(pos+2*dir1-2*dir2) + 8.0*f.getData(pos+dir1-2*dir2) - 8.0*f.getData(pos-dir1-2*dir2) + f.getData(pos-2*dir1-2*dir2))/(144.0*this->spacing[wrt1]*this->spacing[wrt2]);
+	    vector<int> dir1(dim);
+	    vector<int> dir2(dim);
+	    for(int i = 0; i < dim; i++){
+		    if(i == wrt1){dir1[i] = 1;}else{dir1[i] = 0;}
+		    if(i == wrt2){dir2[i] = 1;}else{dir2[i] = 0;}
+	    };
+	    return (f.getData(pos+2*dir1+2*dir2) - 8.0*f.getData(pos+dir1+2*dir2) + 8.0*f.getData(pos-dir1+2*dir2) - f.getData(pos-2*dir1+2*dir2) - 8.0*f.getData(pos+2*dir1+dir2) +64.0*f.getData(pos+dir1+dir2) -64.0*f.getData(pos-dir1+dir2) + 8.0* f.getData(pos-2*dir1+dir2) + 8.0*f.getData(pos+2*dir1-dir2) - 64.0*f.getData(pos+dir1-dir2)+64.0*f.getData(pos-dir1-dir2) - 8.0*f.getData(pos-2*dir1-dir2) - f.getData(pos+2*dir1-2*dir2) + 8.0*f.getData(pos+dir1-2*dir2) - 8.0*f.getData(pos-dir1-2*dir2) + f.getData(pos-2*dir1-2*dir2))/(144.0*this->spacing[wrt1]*this->spacing[wrt2]);
 
 	}
 }
 
 template <class T>
-T BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, ...) {
-	Eigen::VectorXd<int> pos(this->dim);
+T BaseFieldTheory::double_derivative(const Field<T> f, int wrt1, int wrt2, ...) {
+    Eigen::VectorXd<int> pos(dim);
    	va_list ap;
-    	va_start(ap, this->dim);
-   	for(int i=1; i<=d; i++){
+    	va_start(ap, dim);
+   	for(int i=0; i<dim; i++){
     	pos[i] = va_arg(ap,int);
     	}
-	return this->double_derivative(f, wrt1, wrt2, pos);
+	return double_derivative(f, wrt1, wrt2, pos);
 }
 
 //energy stuff (some is virtual and needs to be overwritten but if not will spit out an error message)
 
-void BaseFieldTheory::updateEnergy(){
-	float sum = 0.0;
-	for(int i = 0; i < this->size[0]; i++){
-	for(int j = 0; j < this->size[1]; j++){
-		float buffer = this->calculateEnergy(i,j);
-		this->energyDensity[i+j*size[0]]=buffer;
-		sum += buffer;
-	}}
-	this->energy = sum*spacing[0]*spacing[1];
+void BaseFieldTheory::updateEnergy(){ // only currently for 2-dim's!
+	double sum = 0.0;
+	for(int i = bdw; i < size[0]-bdw; i++){
+	for(int j = bdw; j < size[1]-bdw; j++){
+    if(inBoundary) {
+        double buffer = calculateEnergy(i, j);
+        energyDensity[i + j * size[0]] = buffer;
+        sum += buffer;
+    }}}
+	energy = sum*spacing[0]*spacing[1];
 };
 
 virtual float BaseFieldTheory::calculateEnergy(...)
@@ -378,6 +324,49 @@ virtual float BaseFieldTheory::calculateEnergy(...)
 cout << "ERROR! - either the incorrect number of parameters was entered into calculateEnergy or the calculateEnergy has not been set in the derived Field Theory class!\n";
 return -1.0;
 }
+
+void gradientFlow(int iterations, T functiontoberunaftereachiteration = NULL, int often=0){ // needs to be updated to gradient flow the entire field then update the field!
+    for(int no = 0; no < iterationsl no++){
+    for(int i = bdw; i < size[0]-bdw; i++){
+    for(int j = bdw; j < size[1]-bdw; j++){
+    if(inBoundary) {
+        for(int f = 0; f < fields.size(); f++){
+            fields[f](i,j) =  gradientflowcalculation(field_name,i,j);
+        }
+    }}}
+    if(function != NULL && no%often == 0){
+        field.function();
+    }
+    }
+}
+
+
+//Time Dependent versions of fields and fields theories
+template <class T>
+class timeDependentField: public Field<T>{
+	public:
+		//constructors etc. also
+		T * getTimeDerivative();
+		T getTimeDerivative(...);
+		T getTimeDerivative(vector<int> pos);
+		void setTimeDerivative();
+		void setTimeDerivative(...);
+		void setTimeDerivative(vector<int> pos);
+		fillTimeDerivative(T value);
+	private:
+		T * timeDerivative;
+};
+
+
+
+
+class timeDependentFieldTheory: public BaseFieldTheory {
+	public:
+		//loads of extra stuff for calculating time derivatives etc. and on initilisation call the timeDependentFields rather than the standard fields!
+
+	private:
+};
+
 
 
 
