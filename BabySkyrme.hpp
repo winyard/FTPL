@@ -31,65 +31,29 @@ class BabySkyrmeModel : public BaseFieldTheory {
 	// parameters and fields
 	float2 spacing;
 	float mu, mpi;
-	Field<Eigen::VectorXd<double,3>> f;
+	Field<Eigen::VectorXd> * f;
 };
 
 
-BabySkyrmeModel::BabySkyrmeModel(unsigned int width, unsigned int height): f(width,height){
+BabySkyrmeModel::BabySkyrmeModel(unsigned int width, unsigned int height): {
 	vector<int> sizein = (width, height);
 	BaseFieldTheory(2,sizein);
-	f = createField(field<Eigen::VectorXd<float,3>>(2,(Eigen::VectorXd)[0,0,1],sizein);
+	f = createField(Eigen::VectorXd);
 };
 
 
 BabySkyrmeModel::BabySkyrmeModel(const char * filename){
-
+    // mearly place holders so the fields can be initialised
+    dim = 2;
+    size = (2,2);
+    f = createField(Eigen::VectorXd);
+    load(filename);
 };
-
-template <class T>
-BabySkyrmeModel::BabySkyrmeModel(const char * filename) {
-ifstream openfile(filename);
-int a,b;
-double d, e, g;
-// 1st line read in size axbxc and spacing dx,dy,dz
-    openfile >> a >> b >> d >> e ;
-    Eigen::VectorXd<int> sizein(2) = (a, b);
-    Eigen::VectorXd<int> spacingin(2) = (d, e);
-    BaseFieldTheory(2,sizein,spacingin);
-    this->f = field<Eigen::VectorXd<float,3>>(2,(Eigen::VectorXd)[0,0,1],sizein)	
-// 2nd line read in parameters
-    openfile >> d >> g;
-    this->mu = d;
-    this->mpi = g;
-// read in data
-while(!openfile.eof())
-{
-    openfile >> a >> b >> d >> e >> g ;
-    this->data[a+b*sizein(2)] = (d,e,g);
-}
-cout << "Baby Skyrme Field of dimensions [" << sizein(0) <<"," << sizein(1) << "] succesfully read from file " << filename << "\n";
-}
-
-//Save functions
-void BabySkyrmeModel::save(const char * filename) {
-ofstream savefile(filename);
-// 1st line save size axb and spacing dx,dy
-savefile << this->size[0] << " " << this->size[1] << "\n";
-// 2nd line read save parameters
-savefile << this->mu << " " << this->mpi << "\n";
-// save data
-for(int i = 0; i < this->size[0] ; i++){
-for(int j = 0; j < this->size[1] ; j++){
-     outputbuffer = this->f.get(i, j);
-    savefile << i << " " << j << " " << outputbuffer[1] << " " << outputbuffer[2] << " " << outputbuffer[3] << "\n";
-}}
-cout << "Baby Skyrme Field output to file " << filename << "\n";
-}
 
 //maths!
 float BabySkyrmeModel::calculateEnergy(Eigen::VectorXd<int> pos){
-	Eigen::VectorXd dx = this->single_derivative(f, 1, pos);
-	Eigen::VectorXd dy = this->single_derivative(f, 2, pos);
+	Eigen::VectorXd dx = single_derivative(f, 1, pos);
+	Eigen::VectorXd dy = single_derivative(f, 2, pos);
 	return 0.5*(dx.squarednorm() + dy.squarednorm() + mu*mu*(dx.cross(dy)).squarednorm()) + mpi*mpi*(1.0 - f.getValue(pos)[3]);
 };
 

@@ -38,7 +38,7 @@ template <class T>
 class Field {
     public:
 	    int dim;
-		Field(int d, vector<int> size, T value = NULL);
+		Field(int d, vector<int> size);
         ~Field();
 		T operator()(...);
         const vector<T> getData();
@@ -52,19 +52,20 @@ class Field {
 		void save(ofstream output);
 		void load(ifstream input);
 		void normalise();
+        void update();
+        void resize(vector<int> sizein);
     protected:
         vector<T> data;
 		vector<int>  size;
+        vector<T> buffer;
 };
 
 /* --- Constructors & Destructors --- */
 
 template <class T>
-Field<T>::Field(int d, vector<int> sizein, T value = NULL): dim(d), size(sizein)  {
+Field<T>::Field(int d, vector<int> sizein): dim(d), size(sizein)  {
     data.resize(getTotalSize());
-	if(value){
-		fill(value);
-	}
+    buffer.resize(getTotalSize());
 }
 
 /* --- Fetch & Set --- */
@@ -170,6 +171,99 @@ void Field<T>::normalise(){
 	}
 }
 
+template <class T>
+void Field<T>::update() { // moves the buffer values to the data
+    data = buffer;
+}
+
+
+template <class T>
+void Field<T>::resize(vector<int> sizein) { // resize the fields for different accuracy
+    if(size.size() == sizein.size()) {
+        size = sizein;
+        data.resize(getTotalSize());
+        buffer.resize(getTotalSize());
+    }
+    else{
+        cout << "Tried to resize field with incorrect size of dimension vector!\n";
+    }
+}
+
+/***********************/
+/*    Target Space     */
+/***********************/
+
+class TargetSpace {
+    public:
+        TargetSpace();
+        ~TargetSpace();
+        template<class T>
+        inline Field<T> * field(int i);
+        template<class T>
+        Field<T> * addField(int dim, vector<int> size, string target);
+        void resize(vector<int> sizein);
+        void load_fields(ifstream loadfile);
+        void save_fields(ofstream savefile);
+    private:
+        int no_fields;
+        // Add aditional Field types as they are created here!
+        std::vector<Field<Eigen::VectorXd>> fields1;
+        std::vector<Field<double>> fields2;
+        std::vector<Field<int>> fields3;
+        std::vector<Field<Eigen::ArrayXXf>> fields4;
+};
+
+
+TargetSpace::TargetSpace(){
+    no_fields = 0;
+}
+
+    template<class T>
+    Field<T> * TargetSpace::field(int i){
+        if(i <= fields1.size()-1){
+            return  fields1[i];
+        }
+        else if(i <= fields1.size() + fields2.size() - 1){
+            return fields2[i-fields1.size()];
+        }
+        else if(i <= fields1.size() + fields2.size() +fields3.size() -1){
+            return fields3[i-fields1.size()-fields2.size()];
+        }
+        else{
+            return fields4[i-fields1.size()-fields2.size()-fields3.size() - 1];
+        }
+    }
+
+void TargetSpace::resize(vector<int> sizein){
+    for(int i = 0; i < no_fields; i++){
+        field(i)->resize(sizein);
+    }
+}
+
+Field<T> * TargetSpace::addField(int dim, vector<int> size, string target){
+    if(target == "Eigen::VectorXd"){fields1.push_back(Field<Eigen::VectorXd>(dim, size));return fields1[fields1.size()-1];}
+    else if(target == "double"){fields2.push_back(Field<double>(dim, size));return fields2[fields2.size()-1];}
+    else if(target == "int"){fields3.push_back(Field<int>(dim, size));return fields3[fields3.size()-1];}
+    else if(target == "Eigen::ArrayXXd"){fields4.push_back(Field<Eigen::ArrayXXf>(dim, size));return fields4[fields4.size()-1];}
+    else{cout << "The container TargetSpace does not contain a vector for the type " << target
+              << " please create one and edit the class to loop through it correctly!\n";}
+    no_fields = no_fields + 1;
+}
+
+
+
+
+    void TargetSpace::save_fields(ofstream savefile){
+        for(int i = 0; i < no_fields; i++){
+            field(i).save(savefile);
+        }
+    }
+
+    void TargetSpace::load_fields(ifstream loadfile){
+        for(int i = 0; i < no_fields; i++){
+            field(i).load(loadfile);
+        }
+    }
 /***********************/
 /*   Field Theories    */
 /***********************/
@@ -187,28 +281,24 @@ class BaseFieldTheory {
 	void fieldTransformation(T tranformation); // transform a target space by some class T (normally some matrix or something)
 	void setBoundaryType(vector<int> boundaryin); // set the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
 	void updateEnergy(); // cycles through with correct boundary condtions and calculates the energy at each point from the derived classes energy functional
-    template<class T>
-	void gradientFlow(int iterations, T functiontoberunaftereachiteration = NULL); // cycle through with correct boundary condtions and updates each point based on the derived classes energy gradient calculation
-    template <class T>
-    virtual T calculateGradientFlow(Field<T> select_field,...);
-    template <class T>
-    virtual T calculateEnergy(...); // need to be overriden by derived class with correct pointwise energy calculation
+	void gradientFlow(int iterations, void (*correct_func)() ); // cycle through with correct boundary condtions and updates each point based on the derived classes energy gradient calculation
+    virtual void calculateGradientFlow(...);
+    virtual double calculateEnergy(...); // need to be overriden by derived class with correct pointwise energy calculation
     bool inBoundary(...);
     int getTotalSize();
 	template <class T>
-	virtual T single_derivative(Field<T> * f, int wrt, ...);
+	T single_derivative(Field<T> * f, int wrt, ...);
 	template <class T>
-	virtual T single_derivative(Field<T> * f, int wrt, vector<int> pos);
+	T single_derivative(Field<T> * f, int wrt, vector<int> pos);
 	template <class T>
-	virtual T double_derivative(Field<T> * f, int wrt1, int wrt2, ...);
+	T double_derivative(Field<T> * f, int wrt1, int wrt2, ...);
 	template <class T>
-	virtual T double_derivative(Field<T> * f, int wrt1, int wrt2, vector<int> pos);
+	T double_derivative(Field<T> * f, int wrt1, int wrt2, vector<int> pos);
    protected:
 	template <class T>
 	Field<T> * createField(T type);
 	//vector<unique_ptr<Field>> fields;
-    template<class T>
-    vector<Field<T> *> fields;
+    TargetSpace fields;
 	vector<int> bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
 	vector<int> boundarytype; // indicates the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
 	vector<double> energydensity;
@@ -239,8 +329,7 @@ BaseFieldTheory::BaseFieldTheory(int d, vector<int> sizein): dim(d), size(sizein
 
 template <class T>
 Field<T> * BaseFieldTheory::createField(T type){
-    fields.emplace_back(new Field<type>(dim, size));
-    return fields[fields.size()-1];
+    return fields.addField(dim, size, type);
 };
 
 int BaseFieldTheory::getTotalSize(){
