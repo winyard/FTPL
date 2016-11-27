@@ -58,8 +58,8 @@ endif()
 message("Compiling with: ${CMAKE_CXX_COMPILER_ID}")
 
 
-file(GLOB_RECURSE FTPL_SOURCES "*.cpp")
-file(GLOB_RECURSE FTPL_HEADERS "*.hpp")
+file(GLOB_RECURSE FTPL_SOURCES "source/*.cpp")
+file(GLOB_RECURSE FTPL_HEADERS "source/*.hpp")
 
 set (FTPL_INCLUDE_DIRS "")
 foreach (_headerFile ${FTPL_HEADERS})
