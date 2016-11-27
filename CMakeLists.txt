@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.9)
 project(FTPL)
 
+message("Compiling CMake list")
+
 include_directories(source)
 
 #set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g -std=c++14 -Wno-deprecated-declarations")
@@ -66,6 +68,7 @@ foreach (_headerFile ${FTPL_HEADERS})
     get_filename_component(_dir ${_headerFile} PATH)
     list (APPEND FTPL_INCLUDE_DIRS ${_dir})
 endforeach()
+
 list(REMOVE_DUPLICATES FTPL_INCLUDE_DIRS)
 
 include_directories(${FTPL_INCLUDE_DIRS})
