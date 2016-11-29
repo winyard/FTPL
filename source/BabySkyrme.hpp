@@ -16,6 +16,7 @@ class BabySkyrmeModel : public BaseFieldTheory {
 		Field<Eigen::VectorXd> * f;
     //maths (higher up functions run slightly faster)
         inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
+		inline virtual void __attribute__((always_inline)) RK4calc(int k, int pos) final;
 	//required functions
         BabySkyrmeModel(const char * filepath);
         BabySkyrmeModel(int width, int height);
@@ -39,18 +40,18 @@ class BabySkyrmeModel : public BaseFieldTheory {
 		vector<double> chargedensity;
 };
 
-/*    void BabySkyrmeModel::calculateAandb(int i){
-        Eigen::Vector3d fx = single_derivative(f, 0, i);
-        Eigen::Vector3d fy = single_derivative(f, 1, i);
-        Eigen::Vector3d fxx = double_derivative(f, 0, 0, i);
-        Eigen::Vector3d fyy = double_derivative(f, 1, 1, i);
-        Eigen::Vector3d fxy = double_derivative(f, 0, 1, i);
-        Eigen::Vector3d ftx = double_derivative(ft, 1, 1, i);
-        Eigen::Vector3d fty = double_derivative(ft, 0, 1, i);
-        Eigen::Vector3d f0 = f->getData(pos);
+inline RK4calc(int k, int pos){
+	if(inBoundary(pos)) {
+		Eigen::Vector3d fx = single_derivative(f, 0, pos);
+		Eigen::Vector3d fy = single_derivative(f, 1, pos);
+		Eigen::Vector3d fxx = double_derivative(f, 0, 0, pos);
+		Eigen::Vector3d fyy = double_derivative(f, 1, 1, pos);
+		Eigen::Vector3d fxy = double_derivative(f, 0, 1, pos);
+		Eigen::Vector3d f0 = f->data[pos];
 
 
-    }*/
+	}
+}
 
 void BabySkyrmeModel::setParameters(double mu_in, double mpi_in){
     mu = mu_in;
