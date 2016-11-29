@@ -17,6 +17,22 @@
 #include <memory>
 #include <Eigen/Dense>
 #include <stdarg.h>
+#include <chrono>
+
+class Timer
+{
+public:
+    Timer() : beg_(clock_::now()) {}
+    void reset() { beg_ = clock_::now(); }
+    double elapsed() const {
+        return std::chrono::duration_cast<second_>
+                (clock_::now() - beg_).count(); }
+
+private:
+    typedef std::chrono::high_resolution_clock clock_;
+    typedef std::chrono::duration<double, std::ratio<1> > second_;
+    std::chrono::time_point<clock_> beg_;
+};
 
 
 using namespace std;
@@ -29,19 +45,19 @@ namespace FTPL {
 template <class T>
 class Field {
     public:
+        inline const T  __attribute__((always_inline)) getData( const Eigen::VectorXi pos);
         vector<T> data;
         vector<T> buffer;
 	    int dim;
-        inline const T  __attribute__((always_inline)) getData(vector<int> pos);
-        inline const T  __attribute__((always_inline)) getData(Eigen::VectorXi pos);
-        inline void  __attribute__((always_inline)) setBuffer(T value, vector<int> pos);
+        inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
+        inline void  __attribute__((always_inline)) setBuffer(const T value, vector<int> &pos);
 		Field(int d, vector<int> size, bool isdynamic);
         ~Field(){};
 		inline T operator()(...); // TO BE WRITTEN
         inline const vector<T> getData();
         vector<int> getSize();
         int getSize(int com);
-        inline int getTotalSize();
+        inline int __attribute__((always_inline)) getTotalSize();
         inline void setData(vector<T> datain);
 		inline void setData(T value, vector<int> pos);
         inline void setData(T value, Eigen::VectorXi pos);
@@ -95,7 +111,7 @@ inline T __attribute__((always_inline))  Field<T>::operator()(...){ // can be op
 }
 
 template <class T>
-inline const __attribute__((always_inline))  T Field<T>::getData(vector<int> pos) {// can be optimised better! - similar to above method
+inline const __attribute__((always_inline))  T Field<T>::getData( const vector<int> pos) {// can be optimised better! - similar to above method
     int point = pos[0];
     int multiplier = 1;
     for(int i=1; i<dim; i++){
@@ -106,7 +122,7 @@ inline const __attribute__((always_inline))  T Field<T>::getData(vector<int> pos
 }
 
     template <class T>
-inline const __attribute__((always_inline))  T Field<T>::getData(Eigen::VectorXi pos) {// can be optimised better! - similar to above method
+inline const __attribute__((always_inline))  T Field<T>::getData( const Eigen::VectorXi pos) {// can be optimised better! - similar to above method
         int point = pos[0];
         int multiplier = 1;
         for(int i=1; i<dim; i++){
@@ -135,7 +151,7 @@ inline void __attribute__((always_inline))  Field<T>::setData(T value, vector<in
 }
 
     template <class T>
-inline void __attribute__((always_inline))  Field<T>::setBuffer(T value, vector<int> pos){
+inline void __attribute__((always_inline))  Field<T>::setBuffer(const T value, vector<int> &pos){
         int point = pos[0];
         int multiplier = 1;
         for(int i=1; i<dim; i++){
@@ -265,6 +281,7 @@ class TargetSpace {
         void save_fields(ofstream& savefile);
         void update_fields();
         void update_gradients(double dt);
+        void normalise();
     private:
         int no_fields;
         // Add aditional Field types as they are created here!
@@ -274,6 +291,15 @@ class TargetSpace {
         std::vector<Field<Eigen::MatrixXd>> fields4;
 };
 
+
+void TargetSpace::normalise(){
+    for(int i = 0; i < fields1.size(); i++){
+        fields1[i].normalise();
+    }
+    for(int i = 0; i < fields4.size(); i++){
+        fields1[i].normalise();
+    }
+}
 
 TargetSpace::TargetSpace(){
     no_fields = 0;
@@ -406,8 +432,8 @@ class BaseFieldTheory {
 	~BaseFieldTheory(){};
     inline vector<int> next(vector<int> current);
     inline vector<int>  __attribute__((always_inline)) convert(int in);
-    inline virtual void calculateGradientFlow(vector<int> pos); // TO BE WRITTEN
-    inline virtual double calculateEnergy(vector<int> pos);// TO BE WRITTEN
+    inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
+    inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
     void RK4(); // TO BE WRITTEN
 	void save(const char * savepath); // TO BE WRITTEN
 	void load(const char * loadpath); // TO BE WRITTEN
@@ -417,25 +443,18 @@ class BaseFieldTheory {
 	void fieldTransformation(T tranformation); // TO BE WRITTEN
 	void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
 	void updateEnergy(); // TO BE WRITTEN
-    inline virtual void gradientFlow(int iterations); // TO BE WRITTEN
+    void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
     void setTimeInterval(double dt_in);
     double getEnergy(){return energy;};
-    inline bool inBoundary(vector<int> pos); // TO BE WRITTEN
+    inline bool inBoundary(vector<int> pos);
+    inline bool inBoundary(int pos);
     inline  void setSpacing(vector<double> spacein);
     vector<double> getSpacing();
     int getTotalSize();
 	template <class T>
-	inline T  __attribute__((always_inline)) single_derivative(Field<T> * f, int wrt, ...);
+	inline T single_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
 	template <class T>
-	inline T  __attribute__((always_inline)) single_derivative(Field<T> * f, int wrt, vector<int> posin);
-	template <class T>
-    inline T  __attribute__((always_inline)) single_derivative(Field<T> * f, int wrt, Eigen::VectorXi pos);
-    template <class T>
-	inline T  __attribute__((always_inline)) double_derivative(Field<T> * f, int wrt1, int wrt2, ...);
-	template <class T>
-	inline T  __attribute__((always_inline)) double_derivative(Field<T> * f, int wrt1, int wrt2, vector<int> posin);
-    template <class T>
-    inline T  __attribute__((always_inline)) double_derivative(Field<T> * f, int wrt1, int wrt2, Eigen::VectorXi pos);
+    inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
    protected:
 	template <class T>
 	Field<T> * createField(Field<T> * target, bool isDynamic);
@@ -458,6 +477,10 @@ class BaseFieldTheory {
             }
         }
         return value;
+    }
+
+    inline bool BaseFieldTheory::inBoundary(int pos){
+        return inBoundary(convert(pos));
     }
 
     void BaseFieldTheory::setTimeInterval(double dt_in) {
@@ -508,88 +531,80 @@ int BaseFieldTheory::getTotalSize(){
 /* --- Derivatives --- */
 
 template <class T>
-inline T  __attribute__((always_inline)) BaseFieldTheory::single_derivative(Field<T> * f, int wrt, vector<int> posin) {
-    Eigen::VectorXi pos(dim);
-    for(int i = 0; i < posin.size(); i++){
-        pos[i] = posin[i];
-    }
-    return single_derivative(f,wrt,pos);
+inline T  BaseFieldTheory::single_derivative(Field<T> * f, int wrt, int &point) {
+
+        int mult=1;
+        for(int i=1; i<=wrt; i++){
+            mult *= size[i-1];
+        }
+
+        return (-1.0*f->data[point+2*mult] + 8.0*f->data[point+mult] - 8.0*f->data[point-mult] + f->data[point-2*mult])/(12.0*spacing[wrt]);
+
+    /*for(int i = 0; i < dim; i++){ if(i == wrt){dir[i] = 1;}else{dir[i] = 0;}};
+    return (-1.0*f->getData(pos+2*dir) + 8.0*f->getData(pos+dir) - 8.0*f->getData(pos-dir) + f->getData(pos-2*dir))/(12.0*spacing[wrt]);*/
 }
 
 template <class T>
-inline T  __attribute__((always_inline)) BaseFieldTheory::single_derivative(Field<T> * f, int wrt, Eigen::VectorXi pos) {
-    Eigen::VectorXi dir(dim);
-    for(int i = 0; i < dim; i++){ if(i == wrt){dir[i] = 1;}else{dir[i] = 0;}};
-    return (-1.0*f->getData(pos+2*dir) + 8.0*f->getData(pos+dir) - 8.0*f->getData(pos-dir) + f->getData(pos-2*dir))/(12.0*spacing[wrt]);
-}
-
-template <class T>
-inline T  __attribute__((always_inline)) BaseFieldTheory::single_derivative(Field<T> * f, int wrt, ...) {
-    Eigen::VectorXi pos(dim);
-   	va_list ap;
-    	va_start(ap, dim);
-   	for(int i=0; i<dim; i++){
-    	pos[i] = va_arg(ap,int);
-    	}
-	return single_derivative(f, wrt, pos);
-}
-
-template <class T>
-inline T  __attribute__((always_inline)) BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, vector<int> posin) {
-    Eigen::VectorXi pos(posin.size());
-    for(int i = 0; i < posin.size(); i++){
-        pos[i] = posin[i];
-    }
-    return double_derivative(f,wrt1,wrt2,pos);
-}
-
-template <class T>
-inline T  __attribute__((always_inline)) BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, Eigen::VectorXi pos) {
+inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) {
 	if(wrt1 == wrt2)
 	{
-        Eigen::VectorXi dir(dim);
-	    for(int i = 0; i < dim; i++){ if(i == wrt1){dir[i] = 1;}else{dir[i] = 0;}};
+        int mult=1;
+        for(int i=1; i<=wrt1; i++){
+            mult *= size[i-1];
+        }
+
+        return (-1.0*f->data[point+2*mult] + 16.0*f->data[point+mult] - 30.0*f->data[point] + 16.0*f->data[point-mult]
+                - f->data[point-2*mult])/(12.0*spacing[wrt1]*spacing[wrt1]);
+
+	    /*for(int i = 0; i < dim; i++){ if(i == wrt1){dir[i] = 1;}else{dir[i] = 0;}};
         return (-1.0*f->getData(pos+2*dir) + 16.0*f->getData(pos+dir) - 30.0*f->getData(pos) + 16.0*f->getData(pos-dir)
-                - f->getData(pos-2*dir))/(12.0*spacing[wrt1]*spacing[wrt1]);
+                - f->getData(pos-2*dir))/(12.0*spacing[wrt1]*spacing[wrt1]);*/
 	}
 	else
 	{
-        Eigen::VectorXi dir1(dim);
-        Eigen::VectorXi dir2(dim);
-	    for(int i = 0; i < dim; i++){
-		    if(i == wrt1){dir1[i] = 1;}else{dir1[i] = 0;}
-		    if(i == wrt2){dir2[i] = 1;}else{dir2[i] = 0;}
-	    };
-        return (f->getData(pos+2*dir1+2*dir2) - 8.0*f->getData(pos+dir1+2*dir2) + 8.0*f->getData(pos-dir1+2*dir2)
+        int mult1=1;
+        int mult2=1;
+        if(wrt1 > wrt2) {
+            for (int i = 1; i <= wrt1; i++) {
+                mult1 *= size[i - 1];
+                if (i == wrt2) { mult2 = mult1; }
+            }
+        }
+        else{
+            for (int i = 1; i <= wrt2; i++) {
+                mult2 *= size[i - 1];
+                if (i == wrt1) { mult1 = mult2; }
+            }
+        }
+
+
+        int doub = mult1 + mult2;
+        int alt = mult1 - mult2;
+
+        return (f->data[point+2*doub] - 8.0*f->data[point+mult1+2*mult2] + 8.0*f->data[point-mult1+2*mult2]
+         - f->data[point-2*alt] - 8.0*f->data[point+2*mult1+mult2] +64.0*f->data[point+doub]
+         -64.0*f->data[point-alt] + 8.0*f->data[point-2*mult1+mult2] + 8.0*f->data[point+2*mult1-mult2]
+         - 64.0*f->data[point+alt]+ 64.0*f->data[point-doub] - 8.0*f->data[point-2*mult1-mult2]
+         - f->data[point+2*alt] + 8.0*f->data[point+mult1-2*mult2] - 8.0*f->data[point-mult1-2*mult2]
+         + f->data[point-2*doub])/(144.0*spacing[wrt1]*spacing[wrt2]);
+
+        // old function (much slower!)
+        /*return (f->getData(pos+2*dir1+2*dir2) - 8.0*f->getData(pos+dir1+2*dir2) + 8.0*f->getData(pos-dir1+2*dir2)
                 - f->getData(pos-2*dir1+2*dir2) - 8.0*f->getData(pos+2*dir1+dir2) +64.0*f->getData(pos+dir1+dir2)
                 -64.0*f->getData(pos-dir1+dir2) + 8.0*f->getData(pos-2*dir1+dir2) + 8.0*f->getData(pos+2*dir1-dir2)
-                - 64.0*f->getData(pos+dir1-dir2)+64.0*f->getData(pos-dir1-dir2) - 8.0*f->getData(pos-2*dir1-dir2)
+                - 64.0*f->getData(pos+dir1-dir2)+ 64.0*f->getData(pos-dir1-dir2) - 8.0*f->getData(pos-2*dir1-dir2)
                 - f->getData(pos+2*dir1-2*dir2) + 8.0*f->getData(pos+dir1-2*dir2) - 8.0*f->getData(pos-dir1-2*dir2)
-                + f->getData(pos-2*dir1-2*dir2))/(144.0*spacing[wrt1]*spacing[wrt2]);
+                + f->getData(pos-2*dir1-2*dir2))/(144.0*spacing[wrt1]*spacing[wrt2]);*/
 
 	}
 }
-
-template <class T>
-inline  __attribute__((always_inline)) T BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, ...) {
-    Eigen::VectorXi pos(dim);
-   	va_list ap;
-    	va_start(ap, dim);
-   	for(int i=0; i<dim; i++){
-    	pos[i] = va_arg(ap,int);
-    	}
-	return double_derivative(f, wrt1, wrt2, pos);
-}
-
-//energy stuff (some is virtual and needs to be overwritten but if not will spit out an error message)
 
 void BaseFieldTheory::updateEnergy(){ // only currently for 2-dim's!
 	double sum = 0.0;
         #pragma omp parallel for reduction(+:sum)
         for (int i = 0; i < getTotalSize(); i++) {
-            vector<int> pos = convert(i);
-            if (inBoundary(pos)) {
-                double buffer = calculateEnergy(pos);
+            if (inBoundary(i)) {
+                double buffer = calculateEnergy(i);
                 energydensity[i] = buffer;
                 sum += buffer;
             }
@@ -597,32 +612,48 @@ void BaseFieldTheory::updateEnergy(){ // only currently for 2-dim's!
 	energy = sum*spacing[0]*spacing[1];
 };
 
-inline double BaseFieldTheory::calculateEnergy(vector<int> pos)
+inline double BaseFieldTheory::calculateEnergy(int pos)
 {
 cout << "ERROR! - either the incorrect number of parameters was entered into calculateEnergy or the calculateEnergy has not been set in the derived Field Theory class!\n";
 return -1.0;
 }
 
-inline void BaseFieldTheory::gradientFlow(int iterations){ // needs to be updated to gradient flow the entire field then update the field!
+void BaseFieldTheory::gradientFlow(int iterations, int often, bool normalise){
     int no = 0;
+    double sum = 0.0;
     #pragma omp parallel
     while(no < iterations){
-        //generalise and optimise!!
-
-            {
             #pragma omp for nowait
                 for (int i = 0; i < getTotalSize(); i++) {
-                    calculateGradientFlow(convert(i));
+                    calculateGradientFlow(i);
                 }
-            }
-        //cout << omp_get_thread_num() << " : " << no << "\n";
         #pragma omp barrier
         #pragma omp master
         {
             fields.update_gradients(dt);
+            if(normalise){fields.normalise();}
             no += 1;
+            sum = 0.0;
         }
-    #pragma omp barrier
+        #pragma omp barrier
+        #pragma omp for nowait reduction(+:sum)
+        for (int i = 0; i < getTotalSize(); i++) {
+            if (inBoundary(i)) {
+                double buffer = calculateEnergy(i);
+                sum += buffer;
+            }
+        }
+        #pragma omp barrier
+
+        #pragma omp master
+        {
+            double newenergy = sum * spacing[0] * spacing[1];
+            if(newenergy >= energy+0.0000001){dt = dt*0.5; cout << "CUTTING! due to - " << newenergy << " " << energy << "\n";}
+            energy = newenergy;
+            if (no % often == 0) {
+                cout << "Energy is " << energy <<"\n";
+            }
+        }
     }
 }
 
@@ -651,7 +682,7 @@ inline vector<int> __attribute__((always_inline)) BaseFieldTheory::convert(int i
     return value;
 }
 
-inline void BaseFieldTheory::calculateGradientFlow(vector<int> pos){
+inline void BaseFieldTheory::calculateGradientFlow(int pos){
     cout << "ERROR! you havent written a calculateGradientFlow function!\n";
 }
 

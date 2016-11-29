@@ -6,22 +6,6 @@
 #include <cmath>
 #include "FieldTheories.hpp"
 #include <Eigen/Dense>
-#include <chrono>
-
-class Timer
-{
-public:
-    Timer() : beg_(clock_::now()) {}
-    void reset() { beg_ = clock_::now(); }
-    double elapsed() const {
-        return std::chrono::duration_cast<second_>
-                (clock_::now() - beg_).count(); }
-
-private:
-    typedef std::chrono::high_resolution_clock clock_;
-    typedef std::chrono::duration<double, std::ratio<1> > second_;
-    std::chrono::time_point<clock_> beg_;
-};
 
 using namespace std;
 
@@ -31,7 +15,7 @@ class BabySkyrmeModel : public BaseFieldTheory {
     public:
 		Field<Eigen::VectorXd> * f;
     //maths (higher up functions run slightly faster)
-        inline virtual void calculateGradientFlow(vector<int> pos) final;
+        inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
 	//required functions
         BabySkyrmeModel(const char * filepath);
         BabySkyrmeModel(int width, int height);
@@ -39,17 +23,15 @@ class BabySkyrmeModel : public BaseFieldTheory {
  //       BabySkyrmeModel(BabySkyrmeModel * otherBabySkyrmeModel, Transformation T = IntensityTransformation(DEFAULT));//Allows you to act with a transformation (rotation, isorotation etc.)
         void save(const char * filename);
 	//The maths
-		inline virtual double calculateEnergy(vector<int> pos) final;
-		double calculateCharge(int i,int j);
-		double calculateCharge(vector<int> pos);
+		inline virtual double __attribute__((always_inline)) calculateEnergy(int pos) final;
+		double calculateCharge(int pos);
         double getCharge(){return charge;};
 		void updateCharge();
 		void setCharge(int i, int j, double value);
 		void initialCondition(int B, double x_in, double y_in, double phi);
-        virtual void gradientFlow(int iterations, int often) final;
 		double initial(double r);
-
         void setParameters(double mu_in, double mpi_in);
+        void calculateAandb(vector<int> pos);
 	private:
 	// parameters and fields
 		double mu, mpi;
@@ -57,25 +39,18 @@ class BabySkyrmeModel : public BaseFieldTheory {
 		vector<double> chargedensity;
 };
 
-    void BabySkyrmeModel::gradientFlow(int iterations, int often) { // needs to be updated to gradient flow the entire field then update the field!
-        for(int no = 0; no < iterations; no++) {
-            //Timer tmr;
-            BaseFieldTheory::gradientFlow(10);
-            //cout << "Gradient Flow took " << tmr.elapsed() << "\n";
-            //tmr.reset();
-            f->normalise();
-            //cout << "Normalisation took " << tmr.elapsed() << "\n";
-            //tmr.reset();
-            if (no % often == 0) {
-                double storeEnergy = energy;
-                updateEnergy();
-                if(energy >= storeEnergy){dt = 0.5*dt;}//else{dt = 1.01*dt;};
-                cout << "Energy is " << energy <<"\n";
-            }
-            //cout << "Energy took " << tmr.elapsed() << "\n";
-        }
-    }
+/*    void BabySkyrmeModel::calculateAandb(int i){
+        Eigen::Vector3d fx = single_derivative(f, 0, i);
+        Eigen::Vector3d fy = single_derivative(f, 1, i);
+        Eigen::Vector3d fxx = double_derivative(f, 0, 0, i);
+        Eigen::Vector3d fyy = double_derivative(f, 1, 1, i);
+        Eigen::Vector3d fxy = double_derivative(f, 0, 1, i);
+        Eigen::Vector3d ftx = double_derivative(ft, 1, 1, i);
+        Eigen::Vector3d fty = double_derivative(ft, 0, 1, i);
+        Eigen::Vector3d f0 = f->getData(pos);
 
+
+    }*/
 
 void BabySkyrmeModel::setParameters(double mu_in, double mpi_in){
     mu = mu_in;
@@ -99,33 +74,28 @@ BabySkyrmeModel::BabySkyrmeModel(const char * filename): BaseFieldTheory(dim,{2,
 };
 
 //maths!
-double BabySkyrmeModel::calculateEnergy(vector<int> pos){
+double BabySkyrmeModel::calculateEnergy(int pos){
 	Eigen::Vector3d fx = single_derivative(f, 0, pos);
 	Eigen::Vector3d fy = single_derivative(f, 1, pos);
-    Eigen::Vector3d vac(0,0,1);
-    return 0.5*(fx.squaredNorm() + fy.squaredNorm() + mu*mu*(fx.cross(fy).squaredNorm())) + mpi*mpi*(1.0 - f->getData(pos)[2]);
+    return 0.5*(fx.squaredNorm() + fy.squaredNorm() + mu*mu*(fx.cross(fy).squaredNorm())) + mpi*mpi*(1.0 - f->data[pos][2]);
 };
 
-double BabySkyrmeModel::calculateCharge(vector<int> pos){
+double BabySkyrmeModel::calculateCharge(int pos){
 	Eigen::Vector3d fx = single_derivative(f, 0, pos);
 	Eigen::Vector3d fy = single_derivative(f, 1, pos);
-	return (1.0/(4.0*M_PI))*( (f->getData(pos)).dot(fx.cross(fy)) );
-};
-
-double BabySkyrmeModel::calculateCharge(int i, int j){
-vector<int> inpos = {i,j};
-return calculateCharge(inpos);
-
+	return (1.0/(4.0*M_PI))*( (f->data[pos]).dot(fx.cross(fy)) );
 };
 
 void BabySkyrmeModel::updateCharge(){
 	double sum = 0.0;
-	for(int i = bdw[0]; i < size[0]-bdw[1]; i++){
-	for(int j = bdw[2]; j < size[1]-bdw[3]; j++){
-		double buffer = calculateCharge(i,j);
-		setCharge(i,j,buffer);
-		sum += buffer;
-	}}
+    #pragma omp parallel for reduction(+:sum)
+	for(int i = 0; i < getTotalSize(); i++) {
+        if (inBoundary(i)) {
+            double buffer = calculateCharge(i);
+            chargedensity[i] = buffer;
+            sum += buffer;
+        }
+	}
 	charge = sum*spacing[0]*spacing[1];
 
 };
@@ -134,25 +104,23 @@ void BabySkyrmeModel::setCharge(int i, int j, double value){
 	chargedensity[i + spacing[0]*j] = value;
 }
 
-inline void BabySkyrmeModel::calculateGradientFlow(vector<int> pos){
+inline void BabySkyrmeModel::calculateGradientFlow(int pos){
         if(inBoundary(pos)) {
             Eigen::Vector3d fx = single_derivative(f, 0, pos);
             Eigen::Vector3d fy = single_derivative(f, 1, pos);
             Eigen::Vector3d fxx = double_derivative(f, 0, 0, pos);
             Eigen::Vector3d fyy = double_derivative(f, 1, 1, pos);
             Eigen::Vector3d fxy = double_derivative(f, 0, 1, pos);
-            Eigen::Vector3d f0 = f->getData(pos);
-            Eigen::Vector3d vac(0, 0, 1);
+            Eigen::Vector3d f0 = f->data[pos];
 
-            Eigen::Vector3d gradient = fxx + fyy + mu * mu * (fxx*fy.squaredNorm() + fyy*fx.squaredNorm()
-                                         +fx*fxy.dot(fy) + fy*fxy.dot(fx) - 2.0*fxy*fx.dot(fy) - fx*fyy.dot(fx) - fy*fxx.dot(fy));
+            Eigen::Vector3d gradient = fxx + fyy + mu * mu * (fxx*fy.squaredNorm() + fyy*fx.squaredNorm() + fx*(fxy.dot(fy) - fyy.dot(fx)) + fy*(fxy.dot(fx) - fxx.dot(fy)) - 2.0*fxy*fx.dot(fy) );
             gradient[2] += mpi*mpi;
             double lagrange = -gradient.dot(f0);
             gradient += lagrange*f0;
-            f->setBuffer(gradient, pos);
+            f->buffer[pos] = gradient;
         } else{
             Eigen::Vector3d zero(0,0,0);
-            f->setBuffer(zero, pos);
+            f->buffer[pos] =zero;
         }
     }
 
