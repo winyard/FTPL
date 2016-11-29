@@ -42,6 +42,14 @@ foreach(flag ${ENABLE_CXXFLAGS_TO_CHECK})
 endforeach()
 
 
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
+
+
+
 ###################################
 #Change flags depending on host
 ###################################
@@ -54,8 +62,8 @@ if ("${this_host}" MATCHES "triolith")
 else()
     message("Host: ${this_host} (GNU)")
     set(CMAKE_CXX_COMPILER mpicxx)
-    set(CMAKE_CXX_FLAGS_DEBUG " ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -Wno-deprecated-declarations")
-    set(CMAKE_CXX_FLAGS_RELEASE " ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} -g -O3 -march=native -Wno-deprecated-declarations -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_DEBUG " ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} -g -fopenmp -Wall -Wno-deprecated-declarations")
+    set(CMAKE_CXX_FLAGS_RELEASE " ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} -g -O3 -DEIGEN_NO_DEBUG -fopenmp -march=native -Wno-deprecated-declarations -DNDEBUG")
 endif()
 message("Compiling with: ${CMAKE_CXX_COMPILER_ID}")
 
