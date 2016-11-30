@@ -13,60 +13,78 @@ namespace FTPL {
 
 class BabySkyrmeModel : public BaseFieldTheory {
     public:
+	//place your fields here (likely to need to acces them publicly)
 		Field<Eigen::VectorXd> * f;
-    //maths (higher up functions run slightly faster)
+    //maths (higher up functions run slightly faster these are the important ones!)
         inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
-		inline virtual void __attribute__((always_inline)) RK4calc(int k, int pos) final;
-	//required functions
-        BabySkyrmeModel(const char * filepath);
-        BabySkyrmeModel(int width, int height);
-		~BabySkyrmeModel(){};
- //       BabySkyrmeModel(BabySkyrmeModel * otherBabySkyrmeModel, Transformation T = IntensityTransformation(DEFAULT));//Allows you to act with a transformation (rotation, isorotation etc.)
-        void save(const char * filename);
-	//The maths
+		inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
 		inline virtual double __attribute__((always_inline)) calculateEnergy(int pos) final;
-		double calculateCharge(int pos);
-        double getCharge(){return charge;};
-		void updateCharge();
-		void setCharge(int i, int j, double value);
+		inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
+	//Other Useful functions
 		void initialCondition(int B, double x_in, double y_in, double phi);
 		double initial(double r);
-        void setParameters(double mu_in, double mpi_in);
-        void calculateAandb(vector<int> pos);
+	//required functions
+	BabySkyrmeModel(const char * filepath, bool isDynamic = false);
+	BabySkyrmeModel(int width, int height, bool isDynamic = false);
+	~BabySkyrmeModel(){};
+	void setParameters(double mu_in, double mpi_in);
+	double calculateCharge(int pos);
+	double getCharge(){return charge;};
+	void updateCharge();
 	private:
-	// parameters and fields
+	// parameters
 		double mu, mpi;
 		double charge;
 		vector<double> chargedensity;
 };
 
-inline RK4calc(int k, int pos){
+inline void BabySkyrmeModel::RK4calc(int pos){
 	if(inBoundary(pos)) {
 		Eigen::Vector3d fx = single_derivative(f, 0, pos);
 		Eigen::Vector3d fy = single_derivative(f, 1, pos);
 		Eigen::Vector3d fxx = double_derivative(f, 0, 0, pos);
 		Eigen::Vector3d fyy = double_derivative(f, 1, 1, pos);
 		Eigen::Vector3d fxy = double_derivative(f, 0, 1, pos);
-		Eigen::Vector3d ftx = double_derivative(f.dt, 0, pos);
-		Eigen::Vector3d fty = double_derivative(f.dt, 1, pos);
+		Eigen::Vector3d ftx = single_time_derivative(f, 0, pos);//need to add dt
+		Eigen::Vector3d fty = single_time_derivative(f, 1, pos);//need to add dt
 		Eigen::Vector3d f0 = f->data[pos];
 		Eigen::Vector3d ft = f->dt[pos];
 
 //tryadding .noalias to A could be faster
-		Eigen::MatrixXd A = Matrix<double, 3, 3>::Identity()*(1.0 + 2.0*mu*mu*(fx.squaredNorm() + fy.squaredNorm()))-2.0*mu*mu*(dx*dx.transpose()+dy*dy.transpose());
-		Eigen::Vector3d b = fxx+fyy+ 2.0*mu*mu*( ft*(fxx + fyy).dot(ft) + 2.0*ftx*ft.dot(fx) + 2.0*fty*ft.dot(fy) - (fxx+fyy)*ft.squaredNorm() - fx*ft.dot(ftx) - fy*ft.dot(fty) - ft*(fx.dot(ftx)+fy.dot(fty))
-				 -fxx*fx.squaredNorm() - fyy*fy.squaredNorm() - fxy*fx.dot(fy) - fx*(fxx + fyy).dot(fx) - fy*(fxx + fyy).dot(fy) - fx*(fxx.dot(fx) + fxy.dot(fy)) - fy*(fxy.dot(fx) + fyy.dot(fy))
-				 +(fxx + fyy)*(fx.squaredNorm() + fy.squaredNorm()) + 2.0*fx*(fxy.dot(fy) + fxx.dot(fx)) + 2.0*fy*(fyy.dot(fy) + fxy.dot(fx))  );
-		/*Eigen::Vector3d b = fxx+fyy+ 2.0*mu*mu*( ft*(fxx + fyy).dot(ft) + 2.0*ftx*ft.dot(fx) + 2.0*fty*ft.dot(fy) - (fxx+fyy)*ft.squaredNorm() - fx*ft.dot(ftx) - fy*ft.dot(fty) - ft*(fx.dot(ftx)+fy.dot(fty))
-				-fxx*fx.squaredNorm() - fyy*fy.squaredNorm() - fxy*fx.dot(fy) - fx*(fxx + fyy).dot(fx) - fy*(fxx + fyy).dot(fy) - fx*(fxx.dot(fx) + fxy.dot(fy)) - fy*(fxy.dot(fx) + fyy.dot(fy))
-				+(fxx + fyy)*(fx.squaredNorm() + fy.squaredNorm()) + 2.0*fx*(fxy.dot(fy) + fxx.dot(fx)) + 2.0*fy*(fyy.dot(fy) + fxy.dot(fx))  );*/
-		b[2] += mpi*mpi;
-		double lagrange = -0.5*b.dot(f0) - 0.5*ft.squaredNorm()*(1.0 + fx.squaredNorm() + fy.squaredNorm());
-		b += 2.0*lagrange*f0;
-		f0 = A.colPivHouseholderQr().solve(b);//try some different solvers!
-		//f0 = A.ldlt().solve(b);
-		f->k0_result[pos] = dt*f0;
-		f->k1_result[pos] = dt*ft;
+		//Eigen::Matrix3d A = Eigen::Matrix3d::Identity()*(1.0 + mu*mu*(fx.squaredNorm() + fy.squaredNorm()))-mu*mu*(fx*fx.transpose()+fy*fy.transpose());
+		Eigen::Matrix3d A = Eigen::Matrix3d::Identity()*(1.0 + mu*mu*(fx.squaredNorm() + fy.squaredNorm()))-mu*mu*(fx*fx.transpose()+fy*fy.transpose());
+
+		/*Eigen::Vector3d b = fxx + fyy + mu * mu * (ft * (fxx.dot(ft) + fyy.dot(ft)) + 2.0 * ftx * ft.dot(fx) +
+												   2.0 * fty * ft.dot(fy) - (fxx + fyy) * ft.squaredNorm() -
+												   fx * ft.dot(ftx) - fy * ft.dot(fty) -
+												   ft * (fx.dot(ftx) + fy.dot(fty))
+												   - fxx * fx.squaredNorm() - fyy * fy.squaredNorm() -
+												   2.0*fxy * fx.dot(fy) - fx * (fxx + fyy).dot(fx) -
+												   fy * (fxx + fyy).dot(fy) -
+												   fx * (fxx.dot(fx) + fxy.dot(fy)) -
+												   fy * (fxy.dot(fx) + fyy.dot(fy))
+												   + (fxx + fyy) * (fx.squaredNorm() + fy.squaredNorm()) +
+												   2.0 * fx * (fxy.dot(fy) + fxx.dot(fx)) +
+												   2.0 * fy * (fyy.dot(fy) + fxy.dot(fx)));*/
+		Eigen::Vector3d b = fxx + fyy + mu * mu * (ft * (fxx.dot(ft) + fyy.dot(ft)) + 2.0 * ftx * ft.dot(fx)
+					+ 2.0 * fty * ft.dot(fy) - (fxx + fyy) * ft.squaredNorm() - fx * ft.dot(ftx) - fy * ft.dot(fty)
+					- ft * (fx.dot(ftx) + fy.dot(fty)) - 2.0*fxy * fx.dot(fy)
+					- fx * fyy.dot(fx) - fy * fxx.dot(fy) - fx * fxy.dot(fy) - fy * fxy.dot(fx)
+					+ fxx*fy.squaredNorm() + fyy*fx.squaredNorm() + 2.0 * fx*fxy.dot(fy) + 2.0 * fy * fxy.dot(fx));
+
+			b[2] += mpi * mpi;
+			double lagrange = -0.5 * b.dot(f0) - 0.5 * ft.squaredNorm() * (1.0 + mu*mu*(fx.squaredNorm() + fy.squaredNorm()));
+			b += 2.0 * lagrange * f0;
+			//f0 = A.colPivHouseholderQr().solve(b);//try some different solvers!
+			f0 = A.ldlt().solve(b);
+			//f0 = A.jacobiSvd().solve(b);
+			f->k0_result[pos] = dt * ft;
+			f->k1_result[pos] = dt * f0;
+			//if(f0[0] > 0.01){cout << "found result is " << f0 << " given as " << f->k0_result[pos] << "\n and the other " << f->k1_result[pos] << "\n";}
+	}
+	else{
+		f->k0_result[pos] = Eigen::Vector3d::Zero();
+		f->k1_result[pos] = Eigen::Vector3d::Zero();
 	}
 }
 
@@ -75,18 +93,17 @@ void BabySkyrmeModel::setParameters(double mu_in, double mpi_in){
     mpi = mpi_in;
 }
 
-BabySkyrmeModel::BabySkyrmeModel(int width, int height): BaseFieldTheory(2, {width,height}) {
+BabySkyrmeModel::BabySkyrmeModel(int width, int height, bool isDynamic): BaseFieldTheory(2, {width,height}, isDynamic) {
 	//vector<int> sizein = {width, height};
 	//BaseFieldTheory(2,sizein);
-	f = createField(f, false);
+	f = createField(f, isDynamic);
 	chargedensity.resize(getTotalSize());
 };
 
 
-BabySkyrmeModel::BabySkyrmeModel(const char * filename): BaseFieldTheory(dim,{2,2}){
+BabySkyrmeModel::BabySkyrmeModel(const char * filename, bool isDynamic): BaseFieldTheory(2, {2,2}, isDynamic){
     // mearly place holders so the fields can be initialised
-	f = createField(f, false);
-
+	f = createField(f, isDynamic);
     load(filename);
 	chargedensity.resize(getTotalSize());
 };
@@ -99,13 +116,14 @@ double BabySkyrmeModel::calculateEnergy(int pos){
     return 0.5*(fx.squaredNorm() + fy.squaredNorm() + mu*mu*(fx.cross(fy).squaredNorm())) + mpi*mpi*(1.0 - f->data[pos][2]);
 };
 
-vecctor<double> BabySkyrmeModel::calculateDynamicEnergy(int pos){
+vector<double> BabySkyrmeModel::calculateDynamicEnergy(int pos){
     Eigen::Vector3d fx = single_derivative(f, 0, pos);
     Eigen::Vector3d fy = single_derivative(f, 1, pos);
+	Eigen::Vector3d ft = f->dt[pos];
     vector<double> result(2);
 
-    result[0] = 0.5*(fx.squaredNorm() + fy.squaredNorm() + mu*mu*(fx.cross(fy).squaredNorm())) + mpi*mpi*(1.0 - f->data[pos][2]);
-    result[1] = 0.5*ft.squaredNorm()*(1.0 + 2.0*mu*mu*(dx.squaredNorm() + dy.squaredNorm())) - mu*mu*pow(ft.dot(fx) + ft.dot(fy),2);
+    result[0] = 0.5*(fx.squaredNorm() + fy.squaredNorm() + mu*mu*((fx.cross(fy)).squaredNorm())) + mpi*mpi*(1.0 - f->data[pos][2]);
+	result[1] = 0.5*ft.squaredNorm() + 0.5*mu*mu*(ft.cross(fx).squaredNorm() + ft.cross(fy).squaredNorm() );
     return result;
 };
 
@@ -154,6 +172,10 @@ inline void BabySkyrmeModel::calculateGradientFlow(int pos){
     }
 
 void BabySkyrmeModel::initialCondition(int B, double x_in, double y_in, double phi){
+	if(dynamic) {
+		Eigen::Vector3d value(0,0,0);
+		f->fill_dt(value);
+	}
 	double xmax = size[0]*spacing[0]/2.0;
 	double ymax = size[1]*spacing[1]/2.0;
 	for(int i = bdw[0]; i < size[0]-bdw[1]; i++){
@@ -162,9 +184,8 @@ void BabySkyrmeModel::initialCondition(int B, double x_in, double y_in, double p
 		double y = j*spacing[1]-ymax;
 		double r = sqrt((x-x_in)*(x-x_in) + (y-y_in)*(y-y_in));
 		double theta = atan2(y_in-y,x_in-x) - phi;
-		Eigen::Vector2i pos(i,j);
 		Eigen::Vector3d value(sin(initial(r))*cos(B*theta), sin(initial(r))*sin(B*theta), cos(initial(r)));
-		f->setData(value, pos);
+		f->setData(value, {i,j});
 	}}
 }
 

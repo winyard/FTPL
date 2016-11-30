@@ -47,6 +47,11 @@ class Field {
     public:
         vector<T> data;
         vector<T> buffer;
+        vector<T> buffer_dt;
+        vector<T> dt;
+        vector<T> k0_result;
+        vector<T> k1_result;
+        bool dynamic;
 	    int dim;
         inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
         inline void  __attribute__((always_inline)) setBuffer(const T value, vector<int> &pos);
@@ -57,9 +62,10 @@ class Field {
         vector<int> getSize();
         int getSize(int com);
         inline int __attribute__((always_inline)) getTotalSize();
-        inline void setData(vector<T> datain);
-		inline void setData(T value, vector<int> pos);
+        inline void  __attribute__((always_inline)) setData(vector<T> datain);
+		inline void  __attribute__((always_inline)) setData(T value, vector<int> pos);
         void fill(T value);
+        void fill_dt(T value);
 		void save_field(ofstream& output);
 		void load_field(ifstream& input);
 		void normalise();
@@ -70,13 +76,8 @@ class Field {
         void resize(vector<int> sizein);
         void progressTime(double time_step);
     protected:
-        vector<T> k0_result;
-        vector<T> k1_result;
 		vector<int>  size;
         vector<vector<T>> k_sum;
-        vector<T> buffer_dt;
-        vector<T> dt;
-        bool dynamic;
 };
 
 /* --- Constructors & Destructors --- */
@@ -90,6 +91,8 @@ Field<T>::Field(int d, vector<int> sizein, bool isdynamic): dim(d), size(sizein)
         k_sum.resize(2);
         k_sum[0].resize(getTotalSize());
         k_sum[1].resize(getTotalSize());
+        k0_result.resize(getTotalSize());
+        k1_result.resize(getTotalSize());
         buffer_dt.resize(getTotalSize());
     }
 }
@@ -137,6 +140,17 @@ inline void Field<T>::setData(vector<T> datain){
 }
 
     template <class T>
+    inline void Field<T>::setData(T value, vector<int> pos){
+        int point = pos[0];
+        int multiplier = 1;
+        for(int i = 1 ; i < dim; i++){
+            multiplier *= size[i-1];
+            point += pos[i]*multiplier;
+        }
+        data[point] = value;
+    }
+
+    template <class T>
 inline void __attribute__((always_inline))  Field<T>::setBuffer(const T value, vector<int> &pos){
         int point = pos[0];
         int multiplier = 1;
@@ -147,21 +161,17 @@ inline void __attribute__((always_inline))  Field<T>::setBuffer(const T value, v
         buffer[point] = value;
     }
 
-    template <class T>
-inline void __attribute__((always_inline))  Field<T>::setData(T value, Eigen::VectorXi pos){
-        int point = pos[0];
-        int multiplier = 1;
-        for(int i=1; i<dim; i++){
-            multiplier *= size[i-1];
-            point += pos[i]*multiplier;
-        }
-        data[point] = value;
-    }
-
 template <class T>
 void Field<T>::fill(T value){
     for(int i=0; i<getTotalSize(); i++){
     data[i] = value;
+    }
+}
+
+template <class T>
+void Field<T>::fill_dt(T value){
+    for(int i=0; i<getTotalSize(); i++){
+        dt[i] = value;
     }
 }
 
@@ -235,34 +245,35 @@ void Field<T>::update_field() { // moves the buffer values to the data
     template<class T>
     void Field<T>::updateRK4(int k, int i){
             if(k == 0) {
+
                 data[i] = buffer[i] + 0.5 * k0_result[i];
                 dt[i] = buffer_dt[i] + 0.5 * k1_result[i];
-                k0_sum[i] = k0_result[i];
-                k1_sum[i] = k1_result[i];
+                k_sum[0][i] = k0_result[i];
+                k_sum[1][i] = k1_result[i];
             }else if(k == 1){
                 data[i] = buffer[i] + 0.5 * k0_result[i];
                 dt[i] = buffer_dt[i] + 0.5 * k1_result[i];
-                k0_sum[i] += 2.0*k0_result[i];
-                k1_sum[i] += 2.0*k1_result[i];
+                k_sum[0][i] += 2.0*k0_result[i];
+                k_sum[1][i] += 2.0*k1_result[i];
             } else if(k == 2){
                 data[i] =  buffer[i] + k0_result[i];
                 dt[i] = buffer_dt[i] + k1_result[i];
-                k0_sum[i] += 2.0*k0_result[i];
-                k1_sum[i] += 2.0*k1_result[i];
+                k_sum[0][i] += 2.0*k0_result[i];
+                k_sum[1][i] += 2.0*k1_result[i];
             } else{
-                data[i] =  buffer[i] + (k0_sum[i] + k0_result[i])/6.0;
-                dt[i] = buffer_dt[i] + (k1_sum[i] + k1_result[i])/6.0;
+                data[i] =  buffer[i] + (k_sum[0][i] + k0_result[i])/6.0;
+                dt[i] = buffer_dt[i] + (k_sum[1][i] + k1_result[i])/6.0;
             }
         }
 
         template<class T>
         void Field<T>::updateRK4(int k){
             if(k <3) {
-                data = k0_result[i];
-                dt = k1_result[i];
+                data = k0_result;
+                dt = k1_result;
             }else {
-                data = sum_k[0];
-                dt = sum_k[1];
+                data = k_sum[0];
+                dt = k_sum[1];
             }
     }
 
@@ -305,10 +316,12 @@ class TargetSpace {
         void save_fields(ofstream& savefile);
         void update_fields();
         void update_gradients(double dt);
-        void update_RK4();
+        void update_RK4(int k, int pos);
         void normalise();
-    private:
+        void moveToBuffer();
+        void cutKinetic(int pos);
         int no_fields;
+    private:
         // Add aditional Field types as they are created here!
         std::vector<Field<Eigen::VectorXd>> fields1;
         std::vector<Field<double>> fields2;
@@ -316,6 +329,41 @@ class TargetSpace {
         std::vector<Field<Eigen::MatrixXd>> fields4;
 };
 
+    void TargetSpace::moveToBuffer(){
+        for(int i = 0; i < fields1.size(); i++){
+            fields1[i].buffer = fields1[i].data;
+            if(fields1[i].dynamic){fields1[i].buffer_dt = fields1[i].dt;}
+        }
+        for(int i = 0; i < fields2.size(); i++){
+            fields2[i].buffer = fields2[i].data;
+            if(fields2[i].dynamic){fields2[i].buffer_dt = fields2[i].dt;}
+        }
+        for(int i = 0; i < fields3.size(); i++){
+            fields3[i].buffer = fields3[i].data;
+            if(fields3[i].dynamic){fields3[i].buffer_dt = fields3[i].dt;}
+        }
+        for(int i = 0; i < fields4.size(); i++){
+            fields4[i].buffer = fields4[i].data;
+            if(fields4[i].dynamic){fields4[i].buffer_dt = fields4[i].dt;}
+        }
+
+    }
+
+void TargetSpace::cutKinetic(int pos){
+    for(int i = 0; i < fields1.size(); i++){
+        fields1[i].dt[pos] = Eigen::VectorXd::Zero(fields1[i].dt[pos].size());
+    }
+    for(int i = 0; i < fields2.size(); i++){
+        fields2[i].dt[pos] = 0.0;
+    }
+    for(int i = 0; i < fields3.size(); i++){
+        fields3[i].dt[pos] = 0;
+    }
+    for(int i = 0; i < fields4.size(); i++){
+
+        fields4[i].dt[pos] = Eigen::MatrixXd::Zero(fields4[i].dt[pos].rows(), fields4[i].dt[pos].cols());;
+    }
+}
 
 void TargetSpace::normalise(){
     for(int i = 0; i < fields1.size(); i++){
@@ -363,26 +411,26 @@ void TargetSpace::resize(vector<int> sizein){
 
 Field<Eigen::VectorXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic) {
     fields1.push_back(Field < Eigen::VectorXd > (dim, size, isDynamic));
-    return &fields1[fields1.size() - 1];
     no_fields = no_fields + 1;
+    return &fields1[fields1.size() - 1];
 }
 
 Field<double> * TargetSpace::addField(int dim, vector<int> size, Field<double> * target, bool isDynamic) {
     fields2.push_back(Field < double > (dim, size, isDynamic));
-    return &fields2[fields2.size() - 1];
     no_fields = no_fields + 1;
+    return &fields2[fields2.size() - 1];
 }
 
 Field<int> * TargetSpace::addField(int dim, vector<int> size, Field<int> * target, bool isDynamic) {
     fields3.push_back(Field < int > (dim, size, isDynamic));
-    return &fields3[fields3.size() - 1];
     no_fields = no_fields + 1;
+    return &fields3[fields3.size() - 1];
 }
 
 Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic) {
     fields4.push_back(Field < Eigen::MatrixXd > (dim, size, isDynamic));
-    return &fields4[fields4.size() - 1];
     no_fields = no_fields + 1;
+    return &fields4[fields4.size() - 1];
 }
 
 
@@ -447,18 +495,18 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
         }
     }
 
-    void TargetSpace::update_RK4(){
+    void TargetSpace::update_RK4(int k, int pos){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].updateRK4();
+            if(fields1[i].dynamic){fields1[i].updateRK4(k, pos);}
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].updateRK4();
+            if(fields2[i].dynamic){fields2[i].updateRK4(k, pos);}
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].updateRK4();
+            if(fields3[i].dynamic){fields3[i].updateRK4(k, pos);}
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].updateRK4();
+            if(fields4[i].dynamic){fields4[i].updateRK4(k, pos);}
         }
     }
 /***********************/
@@ -468,14 +516,14 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
 class BaseFieldTheory {
    public:
 	int dim;
-	BaseFieldTheory(int d, vector<int> size); // TO BE WRITTEN
+	BaseFieldTheory(int d, vector<int> size, bool isDynamic); // TO BE WRITTEN
 	~BaseFieldTheory(){};
     inline vector<int> next(vector<int> current);
     inline vector<int>  __attribute__((always_inline)) convert(int in);
     inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
     inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
-    inline virtual void RK4calc(int k, int i);
-    void RK4(); // TO BE WRITTEN
+    inline virtual void __attribute__((always_inline)) RK4calc(int i);
+    void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
 	void save(const char * savepath); // TO BE WRITTEN
 	void load(const char * loadpath); // TO BE WRITTEN
 	void plot(const char * plotpath); // TO BE WRITTEN
@@ -489,11 +537,13 @@ class BaseFieldTheory {
     double getEnergy(){return energy;};
     inline bool inBoundary(vector<int> pos);
     inline bool inBoundary(int pos);
-    void RK4(int iterations, bool cutEnergy);
+    inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
     inline  void setSpacing(vector<double> spacein);
     vector<double> getSpacing();
     int getTotalSize();
     double getTotalSpacing();
+    template <class T>
+    inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
 	template <class T>
 	inline T single_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
 	template <class T>
@@ -510,44 +560,74 @@ class BaseFieldTheory {
 	vector<double> spacing;
 	vector<int> size;
     double dt;
+    bool dynamic;
 };
 
-    void BaseFieldTheory::RK4(int iterations, bool normalise, bool cutEnergy){
+inline vector<double> calculateDynamicEnergy(int pos){
+    cout << " the calculate Dynamic Energy function has not been set in the Derived class!\n";
+}
+
+
+    void BaseFieldTheory::RK4(int iterations, bool normalise, bool cutEnergy, int often){
         double time = 0.0;
-        double sum = 0.0;
+        double newenergy = 0.0;
+        double sum;
+        #pragma omp parallel
         for(int no = 0; no < iterations; no++){
             time += dt;
-            for(int i = 0; i < fields.no_fields; i++) {
-                    fields.field(j).buffer = fields.field(j).data;
-                    fields.field(j).buffer_dt = fields.field(j).dt;
+            #pragma omp master
+            {
+                for (int i = 0; i < fields.no_fields; i++) {
+                    fields.moveToBuffer();
+                }
             }
             for(int k = 0; k < 4; k++) {
+                #pragma omp for nowait
                 for (int i = 0; i < getTotalSize(); i++) {
-                    RK4calc(k, i);
+                    RK4calc(i);
                 }
+                #pragma omp barrier
+                #pragma omp for nowait
                 for (int i = 0; i < getTotalSize(); i++) {
-                    for(int j = 0; j < getTotalSize(); j++){
-                        fields.field(j).updateRK(k,i);
-                    }
+                        fields.update_RK4(k,i);
                 }
             }
-            if(normalise){
-                fields.normalise();
+            #pragma omp master
+            {
+                if (normalise) {
+                    fields.normalise();
+                }
             }
             if(cutEnergy){
                 sum = 0.0;
+                #pragma omp barrier
+                #pragma omp for nowait reduction(+:sum)
                 for (int i = 0; i < getTotalSize(); i++) {
                     if (inBoundary(i)) {
                         double buffer = calculateEnergy(i); // change all references to calculatePotential
                         sum += buffer;
                     }
                 }
-                double newenergy = sum*getTotalSpacing();
-                if(newenergy >= potentialenergy +0.0000001){
-                    fields.cutKinetic();
+                #pragma omp barrier
+                #pragma omp master
+                {
+                    newenergy = sum * getTotalSpacing();
                 }
-                potentialenergy = newenergy;
+                #pragma omp barrier
+                    if (newenergy >= potential + 0.0000001) {
+                        #pragma omp for nowait
+                        for (int i = 0; i < getTotalSize(); i++) {
+                            fields.cutKinetic(i);
+                        }
+                    }
+                    #pragma omp barrier
+                    #pragma omp master
+                    {
+                        potential = newenergy;
+                    }
             }
+            #pragma omp barrier
+            #pragma omp master
             if(no%often == 0){
                 updateEnergy();
                 cout << "time " << time << " : Energy = " << energy << " Kinetic = " << kinetic << " Potential = " << potential <<"\n";
@@ -582,7 +662,8 @@ class BaseFieldTheory {
     }
 
 /* --- Constructors & Destructors --- */
-BaseFieldTheory::BaseFieldTheory(int d, vector<int> sizein): dim(d), size(sizein){
+BaseFieldTheory::BaseFieldTheory(int d, vector<int> sizein, bool isDynamic): dim(d), size(sizein){
+        dynamic = isDynamic;
         energydensity.resize(getTotalSize());
         energy = -1.0;
         // set deault spacing of dx = 1
@@ -603,6 +684,7 @@ BaseFieldTheory::BaseFieldTheory(int d, vector<int> sizein): dim(d), size(sizein
 
 template <class T>
 Field<T> * BaseFieldTheory::createField(Field<T> * target, bool isDynamic){
+    dynamic = isDynamic;
     return fields.addField(dim, size, target, isDynamic);
 };
 
@@ -623,6 +705,16 @@ int BaseFieldTheory::getTotalSize(){
     }
 
 /* --- Derivatives --- */
+template <class T>
+inline T  BaseFieldTheory::single_time_derivative(Field<T> * f, int wrt, int &point) {
+
+    int mult=1;
+    for(int i=1; i<=wrt; i++){
+        mult *= size[i-1];
+    }
+    return (-1.0*f->dt[point+2*mult] + 8.0*f->dt[point+mult] - 8.0*f->dt[point-mult] + f->dt[point-2*mult])/(12.0*spacing[wrt]);
+    }
+
 
 template <class T>
 inline T  BaseFieldTheory::single_derivative(Field<T> * f, int wrt, int &point) {
@@ -697,7 +789,7 @@ void BaseFieldTheory::updateEnergy() { // only currently for 2-dim's!
     if (dynamic) {
         double sumpot = 0.0;
         double sumkin = 0.0;
-    #pragma omp parallel for reduction(+:sumpot, +:sumkin)
+    #pragma omp parallel for reduction(+:sumpot,sumkin)
         for (int i = 0; i < getTotalSize(); i++) {
             if (inBoundary(i)) {
                 vector<double> buffer = calculateDynamicEnergy(i);
@@ -706,7 +798,7 @@ void BaseFieldTheory::updateEnergy() { // only currently for 2-dim's!
                 sumkin += buffer[1];
             }
         }
-        potenial = sumpot * getTotalSpacing();
+        potential = sumpot * getTotalSpacing();
         kinetic = sumkin * getTotalSpacing();
         energy = potential + kinetic;
     } else {
@@ -731,7 +823,17 @@ cout << "ERROR! - either the incorrect number of parameters was entered into cal
 return -1.0;
 }
 
-void BaseFieldTheory::gradientFlow(int iterations, int often, bool normalise){
+inline vector<double> BaseFieldTheory::calculateDynamicEnergy(int pos){
+    cout << "Error! - the calculateDynamicEnergy virtual function has not been overwritten in the derived Field Theory! Please correct!! \n";
+    return {-1.0,-1.0};
+}
+
+inline void BaseFieldTheory::RK4calc(int i){
+    cout << "Error! - the RK4calc virtual function has not been overwritten in the derived Field Theory! Please correct!! \n";
+}
+
+
+    void BaseFieldTheory::gradientFlow(int iterations, int often, bool normalise){
     int no = 0;
     double sum = 0.0;
     #pragma omp parallel
