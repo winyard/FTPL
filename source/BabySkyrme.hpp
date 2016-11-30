@@ -95,7 +95,18 @@ BabySkyrmeModel::BabySkyrmeModel(const char * filename): BaseFieldTheory(dim,{2,
 double BabySkyrmeModel::calculateEnergy(int pos){
 	Eigen::Vector3d fx = single_derivative(f, 0, pos);
 	Eigen::Vector3d fy = single_derivative(f, 1, pos);
+
     return 0.5*(fx.squaredNorm() + fy.squaredNorm() + mu*mu*(fx.cross(fy).squaredNorm())) + mpi*mpi*(1.0 - f->data[pos][2]);
+};
+
+vecctor<double> BabySkyrmeModel::calculateDynamicEnergy(int pos){
+    Eigen::Vector3d fx = single_derivative(f, 0, pos);
+    Eigen::Vector3d fy = single_derivative(f, 1, pos);
+    vector<double> result(2);
+
+    result[0] = 0.5*(fx.squaredNorm() + fy.squaredNorm() + mu*mu*(fx.cross(fy).squaredNorm())) + mpi*mpi*(1.0 - f->data[pos][2]);
+    result[1] = 0.5*ft.squaredNorm()*(1.0 + 2.0*mu*mu*(dx.squaredNorm() + dy.squaredNorm())) - mu*mu*pow(ft.dot(fx) + ft.dot(fy),2);
+    return result;
 };
 
 double BabySkyrmeModel::calculateCharge(int pos){

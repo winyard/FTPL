@@ -538,7 +538,7 @@ class BaseFieldTheory {
                 sum = 0.0;
                 for (int i = 0; i < getTotalSize(); i++) {
                     if (inBoundary(i)) {
-                        double buffer = calculateEnergy(i);
+                        double buffer = calculateEnergy(i); // change all references to calculatePotential
                         sum += buffer;
                     }
                 }
@@ -693,17 +693,36 @@ inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, i
 	}
 }
 
-void BaseFieldTheory::updateEnergy(){ // only currently for 2-dim's!
-	double sum = 0.0;
-        #pragma omp parallel for reduction(+:sum)
+void BaseFieldTheory::updateEnergy() { // only currently for 2-dim's!
+    if (dynamic) {
+        double sumpot = 0.0;
+        double sumkin = 0.0;
+    #pragma omp parallel for reduction(+:sumpot, +:sumkin)
         for (int i = 0; i < getTotalSize(); i++) {
             if (inBoundary(i)) {
-                double buffer = calculateEnergy(i);
-                energydensity[i] = buffer;
-                sum += buffer;
+                vector<double> buffer = calculateDynamicEnergy(i);
+                energydensity[i] = buffer[0] + buffer[1];
+                sumpot += buffer[0];
+                sumkin += buffer[1];
             }
         }
-	energy = sum*getTotalSpacing();
+        potenial = sumpot * getTotalSpacing();
+        kinetic = sumkin * getTotalSpacing();
+        energy = potential + kinetic;
+    } else {
+        double sum = 0.0;
+    #pragma omp parallel for reduction(+:sum)
+    for (int i = 0; i < getTotalSize(); i++) {
+        if (inBoundary(i)) {
+            double buffer = calculateEnergy(i);
+            energydensity[i] = buffer;
+            sum += buffer;
+        }
+    }
+    energy = sum * getTotalSpacing();
+    potential = energy;
+    kinetic = 0.0;
+    }
 };
 
 inline double BaseFieldTheory::calculateEnergy(int pos)
@@ -788,35 +807,6 @@ void BaseFieldTheory::save(const char * savepath){
 void BaseFieldTheory::load(const char * loadpath){
     cout << "You havent yet written a load function!\n";
 }
-
-//Time Dependent versions of fields and fields theories
-template <class T>
-class timeDependentField: public Field<T>{
-	public:
-		//constructors etc. also
-		T * getTimeDerivative();
-		T getTimeDerivative(...);
-		T getTimeDerivative(vector<int> pos);
-		void setTimeDerivative();
-		void setTimeDerivative(...);
-		void setTimeDerivative(vector<int> pos);
-		void fillTimeDerivative(T value);
-	private:
-		T * timeDerivative;
-};
-
-
-
-
-class timeDependentFieldTheory: public BaseFieldTheory {
-	public:
-		//loads of extra stuff for calculating time derivatives etc. and on initilisation call the timeDependentFields rather than the standard fields!
-
-	private:
-};
-
-
-
 
 }
  // End FTPL namespace
