@@ -47,9 +47,26 @@ inline RK4calc(int k, int pos){
 		Eigen::Vector3d fxx = double_derivative(f, 0, 0, pos);
 		Eigen::Vector3d fyy = double_derivative(f, 1, 1, pos);
 		Eigen::Vector3d fxy = double_derivative(f, 0, 1, pos);
+		Eigen::Vector3d ftx = double_derivative(f.dt, 0, pos);
+		Eigen::Vector3d fty = double_derivative(f.dt, 1, pos);
 		Eigen::Vector3d f0 = f->data[pos];
+		Eigen::Vector3d ft = f->dt[pos];
 
-
+//tryadding .noalias to A could be faster
+		Eigen::MatrixXd A = Matrix<double, 3, 3>::Identity()*(1.0 + 2.0*mu*mu*(fx.squaredNorm() + fy.squaredNorm()))-2.0*mu*mu*(dx*dx.transpose()+dy*dy.transpose());
+		Eigen::Vector3d b = fxx+fyy+ 2.0*mu*mu*( ft*(fxx + fyy).dot(ft) + 2.0*ftx*ft.dot(fx) + 2.0*fty*ft.dot(fy) - (fxx+fyy)*ft.squaredNorm() - fx*ft.dot(ftx) - fy*ft.dot(fty) - ft*(fx.dot(ftx)+fy.dot(fty))
+				 -fxx*fx.squaredNorm() - fyy*fy.squaredNorm() - fxy*fx.dot(fy) - fx*(fxx + fyy).dot(fx) - fy*(fxx + fyy).dot(fy) - fx*(fxx.dot(fx) + fxy.dot(fy)) - fy*(fxy.dot(fx) + fyy.dot(fy))
+				 +(fxx + fyy)*(fx.squaredNorm() + fy.squaredNorm()) + 2.0*fx*(fxy.dot(fy) + fxx.dot(fx)) + 2.0*fy*(fyy.dot(fy) + fxy.dot(fx))  );
+		/*Eigen::Vector3d b = fxx+fyy+ 2.0*mu*mu*( ft*(fxx + fyy).dot(ft) + 2.0*ftx*ft.dot(fx) + 2.0*fty*ft.dot(fy) - (fxx+fyy)*ft.squaredNorm() - fx*ft.dot(ftx) - fy*ft.dot(fty) - ft*(fx.dot(ftx)+fy.dot(fty))
+				-fxx*fx.squaredNorm() - fyy*fy.squaredNorm() - fxy*fx.dot(fy) - fx*(fxx + fyy).dot(fx) - fy*(fxx + fyy).dot(fy) - fx*(fxx.dot(fx) + fxy.dot(fy)) - fy*(fxy.dot(fx) + fyy.dot(fy))
+				+(fxx + fyy)*(fx.squaredNorm() + fy.squaredNorm()) + 2.0*fx*(fxy.dot(fy) + fxx.dot(fx)) + 2.0*fy*(fyy.dot(fy) + fxy.dot(fx))  );*/
+		b[2] += mpi*mpi;
+		double lagrange = -0.5*b.dot(f0) - 0.5*ft.squaredNorm()*(1.0 + fx.squaredNorm() + fy.squaredNorm());
+		b += 2.0*lagrange*f0;
+		f0 = A.colPivHouseholderQr().solve(b);//try some different solvers!
+		//f0 = A.ldlt().solve(b);
+		f->k0_result[pos] = dt*f0;
+		f->k1_result[pos] = dt*ft;
 	}
 }
 

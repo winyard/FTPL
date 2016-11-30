@@ -65,7 +65,8 @@ class Field {
 		void normalise();
         void update_field();
         void update_gradient(double dt);
-        void updateRK4(int k);
+        inline void updateRK4(int k);
+        inline void updateRK4(int k, int i);
         void resize(vector<int> sizein);
         void progressTime(double time_step);
     protected:
@@ -233,12 +234,24 @@ void Field<T>::update_field() { // moves the buffer values to the data
 
     template<class T>
     void Field<T>::updateRK4(int k, int i){
-            if(k == 0 || k == 1){
-                data[i] = 0.5*k0_result[i];
-                dt[i] = 0.5*k1_result[i];
-            } else {
-                data[i] = k0_result[i];
-                dt[i] = k1_result[i];
+            if(k == 0) {
+                data[i] = buffer[i] + 0.5 * k0_result[i];
+                dt[i] = buffer_dt[i] + 0.5 * k1_result[i];
+                k0_sum[i] = k0_result[i];
+                k1_sum[i] = k1_result[i];
+            }else if(k == 1){
+                data[i] = buffer[i] + 0.5 * k0_result[i];
+                dt[i] = buffer_dt[i] + 0.5 * k1_result[i];
+                k0_sum[i] += 2.0*k0_result[i];
+                k1_sum[i] += 2.0*k1_result[i];
+            } else if(k == 2){
+                data[i] =  buffer[i] + k0_result[i];
+                dt[i] = buffer_dt[i] + k1_result[i];
+                k0_sum[i] += 2.0*k0_result[i];
+                k1_sum[i] += 2.0*k1_result[i];
+            } else{
+                data[i] =  buffer[i] + (k0_sum[i] + k0_result[i])/6.0;
+                dt[i] = buffer_dt[i] + (k1_sum[i] + k1_result[i])/6.0;
             }
         }
 
@@ -536,7 +549,7 @@ class BaseFieldTheory {
                 potentialenergy = newenergy;
             }
             if(no%often == 0){
-                updateEnergy()
+                updateEnergy();
                 cout << "time " << time << " : Energy = " << energy << " Kinetic = " << kinetic << " Potential = " << potential <<"\n";
             }
         }

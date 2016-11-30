@@ -29,11 +29,11 @@
       <file leaf-file-name="FieldTheories.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="169">
-              <caret line="508" column="35" lean-forward="false" selection-start-line="508" selection-start-column="35" selection-end-line="508" selection-end-column="35" />
+            <state relative-caret-position="-7101">
+              <caret line="253" column="69" lean-forward="false" selection-start-line="253" selection-start-column="69" selection-end-line="253" selection-end-column="69" />
               <folding>
-                <element signature="e#5785#5794#0" expanded="true" />
-                <element signature="e#6099#6108#0" expanded="true" />
+                <element signature="e#5837#5846#0" expanded="true" />
+                <element signature="e#6792#6801#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -42,8 +42,8 @@
       <file leaf-file-name="BabySkyrme.hpp" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/source/BabySkyrme.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="357">
-              <caret line="51" column="0" lean-forward="true" selection-start-line="51" selection-start-column="0" selection-end-line="51" selection-end-column="0" />
+            <state relative-caret-position="646">
+              <caret line="67" column="30" lean-forward="false" selection-start-line="67" selection-start-column="30" selection-end-line="67" selection-end-column="30" />
               <folding />
             </state>
           </provider>
@@ -56,6 +56,7 @@
       <find>gradientf</find>
       <find>getTot</find>
       <find>spacing[</find>
+      <find>updateR</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -64,8 +65,8 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/source/FieldTheories.hpp" />
         <option value="$PROJECT_DIR$/source/BabySkyrme.hpp" />
+        <option value="$PROJECT_DIR$/source/FieldTheories.hpp" />
       </list>
     </option>
   </component>
@@ -76,9 +77,9 @@
     <sorting>DEFINITION_ORDER</sorting>
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="283" />
-    <option name="y" value="500" />
-    <option name="width" value="1326" />
+    <option name="x" value="114" />
+    <option name="y" value="463" />
+    <option name="width" value="1658" />
     <option name="height" value="733" />
   </component>
   <component name="ProjectView">
@@ -139,15 +140,15 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1480449979732</updated>
-      <workItem from="1480449981178" duration="6584000" />
+      <workItem from="1480449981178" duration="14826000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="6584000" />
+    <option name="totallyTimeSpent" value="14826000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="283" y="500" width="1326" height="733" extended-state="0" />
+    <frame x="114" y="463" width="1658" height="733" extended-state="0" />
     <editor active="true" />
     <layout>
       <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
@@ -201,19 +202,19 @@
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="169">
-          <caret line="508" column="35" lean-forward="false" selection-start-line="508" selection-start-column="35" selection-end-line="508" selection-end-column="35" />
+        <state relative-caret-position="-7101">
+          <caret line="253" column="69" lean-forward="false" selection-start-line="253" selection-start-column="69" selection-end-line="253" selection-end-column="69" />
           <folding>
-            <element signature="e#5785#5794#0" expanded="true" />
-            <element signature="e#6099#6108#0" expanded="true" />
+            <element signature="e#5837#5846#0" expanded="true" />
+            <element signature="e#6792#6801#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/source/BabySkyrme.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="357">
-          <caret line="51" column="0" lean-forward="true" selection-start-line="51" selection-start-column="0" selection-end-line="51" selection-end-column="0" />
+        <state relative-caret-position="646">
+          <caret line="67" column="30" lean-forward="false" selection-start-line="67" selection-start-column="30" selection-end-line="67" selection-end-column="30" />
           <folding />
         </state>
       </provider>
