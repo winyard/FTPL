@@ -14,7 +14,7 @@ namespace FTPL {
 class BabySkyrmeModel : public BaseFieldTheory {
     public:
 	//place your fields here (likely to need to acces them publicly)
-		Field<Eigen::VectorXd> * f;
+		Field<Eigen::Vector3d> * f; // using Xd (general size) is dangerous as sizes are often derived! ALways define a dimension ahead of time!
     //maths (higher up functions run slightly faster these are the important ones!)
         inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
 		inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
@@ -97,13 +97,17 @@ BabySkyrmeModel::BabySkyrmeModel(int width, int height, bool isDynamic): BaseFie
 	//vector<int> sizein = {width, height};
 	//BaseFieldTheory(2,sizein);
 	f = createField(f, isDynamic);
-	chargedensity.resize(getTotalSize());
+    addParameter(mu); // need to add any parameters that you want to be saved/loaded when using the .save/.load function (always add them in the same order!)
+    addParameter(mpi);
+	chargedensity.resize(getTotalSize()); // need to resize charge density as this is not included in the BaseFieldTheory
 };
 
 
 BabySkyrmeModel::BabySkyrmeModel(const char * filename, bool isDynamic): BaseFieldTheory(2, {2,2}, isDynamic){
     // mearly place holders so the fields can be initialised
 	f = createField(f, isDynamic);
+    addParameter(mu);
+    addParameter(mpi);
     load(filename);
 	chargedensity.resize(getTotalSize());
 };

@@ -42,38 +42,48 @@ namespace FTPL {
         if(inBoundary(pos)) {
             Eigen::Vector4d fx = single_derivative(f, 0, pos);
             Eigen::Vector4d fy = single_derivative(f, 1, pos);
+            Eigen::Vector4d fz = single_derivative(f, 2, pos);
             Eigen::Vector4d fxx = double_derivative(f, 0, 0, pos);
             Eigen::Vector4d fyy = double_derivative(f, 1, 1, pos);
+            Eigen::Vector4d fzz = double_derivative(f, 2, 2, pos);
             Eigen::Vector4d fxy = double_derivative(f, 0, 1, pos);
+            Eigen::Vector4d fxz = double_derivative(f, 0, 2, pos);
+            Eigen::Vector4d fyz = double_derivative(f, 1, 2, pos);
             Eigen::Vector4d ftx = single_time_derivative(f, 0, pos);//need to add dt
             Eigen::Vector4d fty = single_time_derivative(f, 1, pos);//need to add dt
+            Eigen::Vector4d ftz = single_time_derivative(f, 2, pos);//need to add dt
             Eigen::Vector4d f0 = f->data[pos];
             Eigen::Vector4d ft = f->dt[pos];
 
 //tryadding .noalias to A could be faster
             //Eigen::Matrix3d A = Eigen::Matrix3d::Identity()*(1.0 + mu*mu*(fx.squaredNorm() + fy.squaredNorm()))-mu*mu*(fx*fx.transpose()+fy*fy.transpose());
-            Eigen::Matrix4d A = Eigen::Matrix4d::Identity()*(1.0 + epi*epi*(fx.squaredNorm() + fy.squaredNorm()))-epi*epi*(fx*fx.transpose()+fy*fy.transpose());
+            Eigen::Matrix4d A = Eigen::Matrix4d::Identity()*(Fpi/4.0 + (1.0/(epi*epi))*( fx.squaredNorm() + fy.squaredNorm() + fz.squaredNorm() ))-(1.0/(epi*epi))*( fx*fx.transpose()+fy*fy.transpose()+fz*fz.transpose() );
 
-            /*Eigen::Vector3d b = fxx + fyy + mu * mu * (ft * (fxx.dot(ft) + fyy.dot(ft)) + 2.0 * ftx * ft.dot(fx) +
-                                                       2.0 * fty * ft.dot(fy) - (fxx + fyy) * ft.squaredNorm() -
-                                                       fx * ft.dot(ftx) - fy * ft.dot(fty) -
-                                                       ft * (fx.dot(ftx) + fy.dot(fty))
-                                                       - fxx * fx.squaredNorm() - fyy * fy.squaredNorm() -
-                                                       2.0*fxy * fx.dot(fy) - fx * (fxx + fyy).dot(fx) -
-                                                       fy * (fxx + fyy).dot(fy) -
-                                                       fx * (fxx.dot(fx) + fxy.dot(fy)) -
-                                                       fy * (fxy.dot(fx) + fyy.dot(fy))
-                                                       + (fxx + fyy) * (fx.squaredNorm() + fy.squaredNorm()) +
-                                                       2.0 * fx * (fxy.dot(fy) + fxx.dot(fx)) +
-                                                       2.0 * fy * (fyy.dot(fy) + fxy.dot(fx)));*/
-            Eigen::Vector4d b = fxx + fyy + epi * epi * (ft * (fxx.dot(ft) + fyy.dot(ft)) + 2.0 * ftx * ft.dot(fx)
-                                                       + 2.0 * fty * ft.dot(fy) - (fxx + fyy) * ft.squaredNorm() - fx * ft.dot(ftx) - fy * ft.dot(fty)
-                                                       - ft * (fx.dot(ftx) + fy.dot(fty)) - 2.0*fxy * fx.dot(fy)
-                                                       - fx * fyy.dot(fx) - fy * fxx.dot(fy) - fx * fxy.dot(fy) - fy * fxy.dot(fx)
-                                                       + fxx*fy.squaredNorm() + fyy*fx.squaredNorm() + 2.0 * fx*fxy.dot(fy) + 2.0 * fy * fxy.dot(fx));
+            Eigen::Vector4d b = (Fpi/4.0)*(fxx + fyy + fzz) + (1.0/(epi*epi))*(ft * (fxx.dot(ft) + fyy.dot(ft) + fzz.dot(ft)) + 2.0 * ftx * ft.dot(fx) +
+                                                       2.0 * fty * ft.dot(fy) + 2.0*ftz * ft.dot(fz) - (fxx + fyy + fzz) * ft.squaredNorm() -
+                                                       fx * ft.dot(ftx) - fy * ft.dot(fty) - fz*ft.dot(ftz)
+                                                       - ft * (fx.dot(ftx) + fy.dot(fty) + fz.dot(ftz) )
+                                                       - fxx * fx.squaredNorm() - fyy * fy.squaredNorm() - fzz * fz.squaredNorm()
+                                                       - 2.0*fxy * fx.dot(fy) - 2.0*fxz * fx.dot(fz) - 2.0*fyz * fy.dot(fz)
+                                                       - fx * (fxx + fyy + fzz).dot(fx) - fy * (fxx + fyy + fzz).dot(fy) - fz * (fxx + fyy + fzz).dot(fz)
+                                                       - fx * (fxx.dot(fx) + fxy.dot(fy) + fxz.dot(fz)) - fy * (fxy.dot(fx) + fyy.dot(fy) + fyz.dot(fz))
+                                                       - fz * (fxz.dot(fx) + fyz.dot(fy) + fzz.dot(fz))
+                                                       + (fxx + fyy + fzz) * (fx.squaredNorm() + fy.squaredNorm() + fz.squaredNorm()) +
+                                                       2.0 * fx * (fxy.dot(fy) + fxx.dot(fx) + fxz.dot(fz)) +
+                                                       2.0 * fy * (fyy.dot(fy) + fxy.dot(fx) + fyz.dot(fz))
+                                                       + 2.0 * fz * (fzz.dot(fy) + fxz.dot(fx) + fyz.dot(fy)) );
 
-            b[2] += mpi * mpi;
-            double lagrange = -0.5 * b.dot(f0) - 0.5 * ft.squaredNorm() * (1.0 + epi*epi*(fx.squaredNorm() + fy.squaredNorm()));
+
+            Eigen::Vector4d b = (Fpi/4.0)*(fxx + fyy + fzz) + (1.0/(epi*epi))*(ft * (fxx.dot(ft) + fyy.dot(ft) + fzz.dot(ft)) + 2.0 * ftx * ft.dot(fx)
+                                                       + 2.0 * fty * ft.dot(fy) + 2.0*ftz*ft.dot(fz) - (fxx + fyy + fzz) * ft.squaredNorm() - fx * ft.dot(ftx) - fy * ft.dot(fty)
+                                                       - fz*ft.dot(ftz) - ft * (fx.dot(ftx) + fy.dot(fty) + fz.dot(ftz)) - 2.0*fxy * fx.dot(fy)
+                                                       - 2.0*fxz*fx.dot(fz) - 2.0*fyz*fy.dot(fz) - fx * (fyy.dot(fx) + fzz.dot(fx)) - fy *(fxx.dot(fy)+fzz.dot(fy))
+                                                       - fz*(fxx.dot(fz)+fyy.dot(fz)) + fxx*(fy.squaredNorm() + fz.squaredNorm()) + fyy*(fx.squaredNorm() + fz.squaredNorm())
+                                                       + fzz*(fx.squaredNorm() + fy.squaredNorm()) + fx*(fxy.dot(fy) + fxz.dot(fz)) + fy*(fxy.dot(fx) + fyz.dot(fz))
+                                                        + fz*(fxz.dot(fx) + fyz.dot(fy)));
+
+            b[0] += mpi * mpi;
+            double lagrange = -0.5 * b.dot(f0) - 0.5 * ft.squaredNorm() * (1.0 + (1.0/(epi*epi))*(fx.squaredNorm() + fy.squaredNorm() + fz.squaredNorm()));
             b += 2.0 * lagrange * f0;
             //f0 = A.colPivHouseholderQr().solve(b);//try some different solvers!
             f0 = A.ldlt().solve(b);
@@ -83,8 +93,8 @@ namespace FTPL {
             //if(f0[0] > 0.01){cout << "found result is " << f0 << " given as " << f->k0_result[pos] << "\n and the other " << f->k1_result[pos] << "\n";}
         }
         else{
-            f->k0_result[pos] = Eigen::Vector3d::Zero();
-            f->k1_result[pos] = Eigen::Vector3d::Zero();
+            f->k0_result[pos] = Eigen::Vector4d::Zero();
+            f->k1_result[pos] = Eigen::Vector4d::Zero();
         }
     }
 
@@ -135,7 +145,7 @@ namespace FTPL {
         Eigen::Vector4d fx = single_derivative(f, 0, pos);
         Eigen::Vector4d fy = single_derivative(f, 1, pos);
         Eigen::Vector4d fz = single_derivative(f, 2, pos);
-        return (1.0/(4.0*M_PI))*( (f->data[pos]).dot(fx));
+        return (1.0/(2.0*M_PI*M_PI))*( levicivita*df*df*df*f(f->data[pos]).dot(fx));
     };
 
     void SkyrmeModel::updateCharge(){

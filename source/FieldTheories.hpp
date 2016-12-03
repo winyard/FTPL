@@ -18,6 +18,7 @@
 #include <Eigen/Dense>
 #include <stdarg.h>
 #include <chrono>
+#include <random>
 
 class Timer
 {
@@ -51,6 +52,8 @@ class Field {
         vector<T> dt;
         vector<T> k0_result;
         vector<T> k1_result;
+        vector<vector<T>> single_derivatives;
+        vector<vector<vector<T>>> double_derivatives;
         bool dynamic;
 	    int dim;
         inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
@@ -75,10 +78,55 @@ class Field {
         inline void updateRK4(int k, int i);
         void resize(vector<int> sizein);
         void progressTime(double time_step);
+        void update_derivatives(vector<double> spacing);
     protected:
 		vector<int>  size;
         vector<vector<T>> k_sum;
 };
+
+template<class T>
+    void Field<T>::alter_point(int i, T value, vector<double> spacing){
+        buffer[i] = data[i];
+        data[i] = value;
+        double dif = data[i]-buffer[i];
+        //now correct the derivatives:
+        double mult1 = 1.0;
+        for(int wrt1 = 0; wrt1<dim; wrt1++){
+            double change = dif/(12.0*spacing[wrt1]);
+            single_derivatives[wrt1][i-2*mult1] += -change;
+            single_derivatives[wrt1][i-1*mult1] += 8.0*change;
+            single_derivatives[wrt1][i+1*mult1] += -8.0*change;
+            single_derivatives[wrt1][i+2*mult1] += change;
+            change = dif/(12.0*spacing[wrt1]*spacing[wrt1]);
+            double_derivatives[wrt1][wrt1][i-2*mult1] += -change;
+            double_derivatives[wrt1][wrt1][i-mult1] += +16.0*change;
+            double_derivatives[wrt1][wrt1][i] += -30.0*change;
+            double_derivatives[wrt1][wrt1][i+mult1] += +16.0*change;
+            double_derivatives[wrt1][wrt1][i+2*mult1] += -change;
+            double mult2 = 1.0;
+            for(int wrt2=0; wrt2<wrt1; wrt2++) {
+                double change = dif/(144.0*spacing[wrt1]*spacing[wrt2]);
+                double_derivatives[wrt2][wrt1][i-2*mult2-2*mult1] += change;
+                double_derivatives[wrt2][wrt1][i-mult2-2*mult1] += -8.0*change;
+                double_derivatives[wrt2][wrt1][i+mult2-2*mult1] += 8.0*change;
+                double_derivatives[wrt2][wrt1][i+2*mult2-2*mult1] += -change;
+                double_derivatives[wrt2][wrt1][i-2*mult2-mult1] += -8.0*change;
+                double_derivatives[wrt2][wrt1][i-mult2-mult1] += +64.0*change;
+                double_derivatives[wrt2][wrt1][i+mult2-mult1] += -64.0*change;
+                double_derivatives[wrt2][wrt1][i+2*mult2-mult1] += +8.0*change;
+                double_derivatives[wrt2][wrt1][i-2*mult2+mult1] += +8.0*change;
+                double_derivatives[wrt2][wrt1][i-mult2+mult1] += -64.0*change;
+                double_derivatives[wrt2][wrt1][i+mult2+mult1] += +64.0*change;
+                double_derivatives[wrt2][wrt1][i+2*mult2+mult1] += -8.0*change;
+                double_derivatives[wrt2][wrt1][i-2*mult2+2*mult1] += -change;
+                double_derivatives[wrt2][wrt1][i-mult2+2*mult1] += 8.0*change;
+                double_derivatives[wrt2][wrt1][i+mult2+2*mult1] += -8.0*change;
+                double_derivatives[wrt2][wrt1][i+2*mult2+2*mult1] += change;
+                mult2 *= size[wrt2];
+            }
+            mult1 *= size[wrt1];
+        }
+    }
 
 /* --- Constructors & Destructors --- */
 
@@ -321,6 +369,9 @@ class TargetSpace {
         void moveToBuffer();
         void cutKinetic(int pos);
         int no_fields;
+        void storeDerivatives(BaseFieldTheory * theory);
+        void randomise(int i, int field, vector<double> spacing, bool normalise);
+        void derandomise(int i, int field, vector<double> spacing);
     private:
         // Add aditional Field types as they are created here!
         std::vector<Field<Eigen::VectorXd>> fields1;
@@ -328,6 +379,142 @@ class TargetSpace {
         std::vector<Field<int>> fields3;
         std::vector<Field<Eigen::MatrixXd>> fields4;
 };
+
+    template<class T>
+    Field<T> * TargetSpace::randomise(int i, int field, vector<double> spacing, bool normalise){
+        std::random_device rd;
+        std::mt19937 mt(rd());
+        if(i <= fields1.size()-1){
+            Eigen::vectorXd value = fields1.data[i];
+            for(int j = 0; j < value.size(); j++){
+                std::uniform_real_distribution<double> dist(fields1.min[j], fields1.max[j]);
+                value[j] = dist(mt);
+            }
+            if(normalise){
+                value.normalize();
+            }
+            fields1[i].alterPoint(i,value,spacing);
+        }
+        else if(i <= fields1.size() + fields2.size() - 1){
+            std::uniform_real_distribution<double> dist(fields2.min, fields2.max);
+            double value = dist(mt);
+            fields1[i].alterPoint(i,value,spacing);
+        }
+        else if(i <= fields1.size() + fields2.size() +fields3.size() -1){
+            std::uniform_int_distribution<int> dist(fields3.min, fields3.max);
+            int value = dist(mt);
+            fields3[i].alterPoint(i,value,spacing);
+        }
+        else{
+            Eigen::MatrixXd value = fields4.data[i];
+            for(int j = 0; j < value.rows(); j++){
+                for(int k = 0; k < value.cols(); k++){
+                    std::uniform_real_distribution<double> dist(fields4.min[j][k], fields4.max[j][k]);
+                    value(j,k) = dist(mt);
+            }}
+            if(normalise){
+                value.normalize();
+            }
+            fields4[i].alterPoint(i,value,spacing);
+        }
+    }
+
+    template<class T>
+    Field<T> * TargetSpace::derandomise(int i, int field, vector<double> spacing){
+        if(i <= fields1.size()-1){
+                fields1[i].alterPoint(i,fields1.buffer[i],spacing);
+        }
+        else if(i <= fields1.size() + fields2.size() - 1){
+                fields2[i].alterPoint(i,fields2.buffer[i],spacing);
+        }
+        else if(i <= fields1.size() + fields2.size() +fields3.size() -1){
+                fields3[i].alterPoint(i,fields3.buffer[i],spacing);
+        }
+        else{
+                fields4[i].alterPoint(i,fields4.buffer[i],spacing);
+        }
+    }
+
+
+
+    void storeDerivatives(BaseFieldTheory * theory){
+        for(int i = 0; i < fields1.size(); i++){
+            fields1[i].single_derivative.resize(theory->dim);
+            fields1[i].double_derivative.resize(theory->dim);
+            for(int j = 0; j < theory->dim ; j++) {
+                fields1[i].single_derivative.resize(theory->getTotalSize());
+                fields1[i].double_derivative[j].resize(theory->dim);
+                for(int k = j; k < theory->dim; k++ ) {
+                    fields1[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                }
+            }
+            for(int j = 0; j < theory->getTotalSize() ; j++) {
+                for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
+                    fields1[i].single_derivative[wrt1]=theory->single_derivative(&fields1[i],wrt1,j);
+                    for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
+                        fields1[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields1[i],wrt1,wrt2,j);
+                    }
+                }
+            }
+        }
+        for(int i = 0; i < fields2.size(); i++){
+            fields2[i].single_derivative.resize(theory->dim);
+            fields2[i].double_derivative.resize(theory->dim);
+            for(int j = 0; j < theory->dim ; j++) {
+                fields2[i].single_derivative.resize(theory->getTotalSize());
+                fields2[i].double_derivative[j].resize(theory->dim);
+                for(int k = j; k < dim; k++ ) {
+                    fields2[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                }
+            }
+            for(int j = 0; j < theory->getTotalSize() ; j++) {
+                for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
+                    fields2[i].single_derivative[wrt1]=theory->single_derivative(&fields2[i],wrt1,j);
+                    for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
+                        fields2[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields2[i],wrt1,wrt2,j);
+                    }
+                }
+            }
+        }
+        for(int i = 0; i < fields3.size(); i++){
+            fields3[i].single_derivative.resize(theory->dim);
+            fields3[i].double_derivative.resize(theory->dim);
+            for(int j = 0; j < theory->dim ; j++) {
+                fields3[i].single_derivative.resize(theory->getTotalSize());
+                fields3[i].double_derivative[j].resize(theory->dim);
+                for(int k = j; k < dim; k++ ) {
+                    fields3[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                }
+            }
+            for(int j = 0; j < theory->getTotalSize() ; j++) {
+                for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
+                    fields3[i].single_derivative[wrt1]=theory->single_derivative(&fields3[i],wrt1,j);
+                    for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
+                        fields3[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields3[i],wrt1,wrt2,j);
+                    }
+                }
+            }
+        }
+        for(int i = 0; i < fields4.size(); i++){
+            fields4[i].single_derivative.resize(theory->dim);
+            fields4[i].double_derivative.resize(theory->dim);
+            for(int j = 0; j < theory->dim ; j++) {
+                fields4[i].single_derivative.resize(theory->getTotalSize());
+                fields4[i].double_derivative[j].resize(theory->dim);
+                for(int k = j; k < dim; k++ ) {
+                    fields4[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                }
+            }
+            for(int j = 0; j < theory->getTotalSize() ; j++) {
+                for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
+                    fields4[i].single_derivative[wrt1]=theory->single_derivative(&fields4[i],wrt1,j);
+                    for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
+                        fields4[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields4[i],wrt1,wrt2,j);
+                    }
+                }
+            }
+        }
+    }
 
     void TargetSpace::moveToBuffer(){
         for(int i = 0; i < fields1.size(); i++){
@@ -437,31 +624,59 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
 
     void TargetSpace::save_fields(ofstream& savefile){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].save_field(savefile);
+            for(int j =0; j < getTotalsize(); j++) {
+                for(k = 0; k < fields1[i].size(); k++) {
+                    savefile << fields1[j](k) << " ";
+                }
+                savefile << "\n";
+            }
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].save_field(savefile);
+            for(int j =0; j < getTotalsize(); j++) {
+                savefile << fields2[j] << "\n";
+            }
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].save_field(savefile);
+            for(int j =0; j < getTotalsize(); j++) {
+                savefile << fields3[j] << "\n";
+            }
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].save_field(savefile);
+            for(int j =0; j < getTotalsize(); j++) {
+                for(k = 0; k < fields4[i].rows(); k++) {
+                for(h = 0; h < fields4[i].cols(); h++){
+                    savefile << fields4[j](k,h) << " ";
+                }}
+                savefile << "\n";
+            }
         }
     }
 
     void TargetSpace::load_fields(ifstream& loadfile){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].load_field(loadfile);
+            for(int j =0; j < getTotalsize(); j++){
+                for(k = 0; k < fields1[i].size(); k++){
+                   loadfile >> fields1[j](k);
+                }
+            }
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].load_field(loadfile);
+            for(int j =0; j < getTotalsize(); j++){
+                loadfile >> fields2[j];
+            }
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].load_field(loadfile);
+            for(int j =0; j < getTotalsize(); j++){
+                loadfile >> fields3[j];
+            }
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].load_field(loadfile);
+            for(int j =0; j < getTotalsize(); j++) {
+                for(k = 0; k < fields4[i].rows(); k++){
+                for(h = 0; h < fields4[i].cols(); h++){
+                    loadfile >> fields4[j](k,h);
+                }}
+            }
         }
     }
 
@@ -523,6 +738,7 @@ class BaseFieldTheory {
     inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
     inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
     inline virtual void __attribute__((always_inline)) RK4calc(int i);
+    inline virtual double __attribute__((always_inline)) metric(int i, int j);
     void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
 	void save(const char * savepath); // TO BE WRITTEN
 	void load(const char * loadpath); // TO BE WRITTEN
@@ -531,6 +747,9 @@ class BaseFieldTheory {
     template <class T>
 	void fieldTransformation(T tranformation); // TO BE WRITTEN
 	void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
+    void setStandardMetric(string type);
+    template<class T>
+    void annealing(int iterations, bool normalise);
 	void updateEnergy(); // TO BE WRITTEN
     void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
     void setTimeInterval(double dt_in);
@@ -539,6 +758,7 @@ class BaseFieldTheory {
     inline bool inBoundary(int pos);
     inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
     inline  void setSpacing(vector<double> spacein);
+    void addParameter( double * parameter_in);
     vector<double> getSpacing();
     int getTotalSize();
     double getTotalSpacing();
@@ -549,6 +769,7 @@ class BaseFieldTheory {
 	template <class T>
     inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
    protected:
+    int metric_type = 0;
 	template <class T>
 	Field<T> * createField(Field<T> * target, bool isDynamic);
 	//vector<unique_ptr<Field>> fields;
@@ -561,7 +782,98 @@ class BaseFieldTheory {
 	vector<int> size;
     double dt;
     bool dynamic;
+    bool curved = false;
+    bool setDerivatives = false;
+    vector<*double> parameters;
 };
+
+    double BaseFieldTheory::metric(int i, int j, vector<double> pos = {0}){
+        Eigen::MatrixXd g;
+        Eigen::Matrix1d gtt;
+        switch(metric_type){
+            case 0: if(i == j){return 1.0}else{return 0.0;};
+            case 1:
+            case 2:
+            case 3:
+            case 4: double r=0.0;
+                    for(int i = 0; i < dim; i++){
+                        r += pos[i]*pos[i];
+                    }
+                    r = sqrt(r);
+                    r = 4.0/(1.0 - r);
+                    for(int i = 0; i < dim; i++){
+                    for(int i = 0; i < dim; i++){
+                        if(i==j){g[i][j]=r;}
+                        else{g[i][j] = 0.0;}
+                    }}
+                    gtt = 1.0;
+                    return {gtt, g};
+            case 5:if(i==j){
+                    double r=0.0;
+                    for(int i = 0; i < dim; i++){
+                        r += pos[i]*pos[i];
+                    }
+                    r = sqrt(r);
+                    double gtt = -1.0*(-pow((1.0 + pow(r,2))/(1.0 - pow(r,2)),2));
+                    double gsqrt = (8.0/(pow(1.0 - (x*x + y*y)/pow(radius,2),3)))*sqrt(1.0/gtt);
+                }
+        }
+    }
+
+    void BaseFieldTheory::SetMetricType(string type){
+        if(type == "flat"){metric_type = 0; curved = false;}
+        else if(type == "polar"){metric_type = 1; curved = true;}
+        else if(type == "spherical"){metric_type = 2; curved = true;}
+        else if(type == "cylindrical"){metric_type = 3; curved = true;}
+        else if(type == "poincare"){metric_type = 4; curved = true;}
+        else if(type == "ADS"){metric_type = 5; curved = true;}
+        else{cout << "WARNING!! " << type << " is not a recognised metric type, please specific another or add the details to ""setMetricType"" and ""Metric"" functions!\n";
+        }
+    }
+
+    void BaseFieldTheory::addParameter(double * parameter_in){
+        parameters.push_back(parameter_in);
+    }
+
+void BaseFieldTheory::annealing(int iterations, bool normalise){
+    if(dynamic){
+        cout << "Warning! You have run annealing on a dynamic theory, this will kill the kinetic componenet!\n";
+        for(int i = 0; i < getTotalSize(); i++){
+            fields.cutKinetic(i);
+        }
+    }
+    updateEnergy();
+    fields.storeDerivatives(*this);
+    setDerivatives = true;
+    std::random_device rd;
+    std::mt19937 mt(rd());
+    std::uniform_int_distribution<int> p_rand(0, getTotalSize());
+    std::uniform_int_distribution<int> f_rand(0, fields.no_fields);
+
+    for(int no = 0; no < iterations; no++){
+        int pos = p_rand(mt);// correct to right random no. generator
+        int field = f_rand(mt); // correct for int random no. generator
+        fields.randomise(pos, field, spacing, normalise);
+        double multiplier = 1.0;
+        double newEnergy = calculateEnergy(i);
+        double oldEnergy = energydensity[i];
+        for(int i = 0; i<dim; i++){
+            newEnergy += calculateEnergy(i+2*multiplier);
+            oldEnergy += energydensity[i+2*multiplier];
+            newEnergy += calculateEnergy(i+multiplier);
+            oldEnergy += energydensity[i+multiplier];
+            newEnergy += calculateEnergy(i-multiplier);
+            oldEnergy += energydensity[i-multiplier];
+            newEnergy += calculateEnergy(i-2*multiplier);
+            oldEnergy += energydensity[i-2*multiplier];
+            multiplier *= size[j];
+        }
+        if(newEnergy > oldEnergy){ // add some heat term! :) - as well as some fall off
+            fields.derandomise(pos,field, spacing);
+        }
+    }
+    setDerivatives = false;
+}
 
 inline vector<double> calculateDynamicEnergy(int pos){
     cout << " the calculate Dynamic Energy function has not been set in the Derived class!\n";
@@ -718,71 +1030,83 @@ inline T  BaseFieldTheory::single_time_derivative(Field<T> * f, int wrt, int &po
 
 template <class T>
 inline T  BaseFieldTheory::single_derivative(Field<T> * f, int wrt, int &point) {
-
-        int mult=1;
-        for(int i=1; i<=wrt; i++){
-            mult *= size[i-1];
+    if(setDerivatives) {
+        return f->single_derivatives[wrt][point];
+    }else {
+        int mult = 1;
+        for (int i = 1; i <= wrt; i++) {
+            mult *= size[i - 1];
         }
 
-        return (-1.0*f->data[point+2*mult] + 8.0*f->data[point+mult] - 8.0*f->data[point-mult] + f->data[point-2*mult])/(12.0*spacing[wrt]);
-
+        return (-1.0 * f->data[point + 2 * mult] + 8.0 * f->data[point + mult] - 8.0 * f->data[point - mult] +
+                f->data[point - 2 * mult]) / (12.0 * spacing[wrt]);
+    }
     /*for(int i = 0; i < dim; i++){ if(i == wrt){dir[i] = 1;}else{dir[i] = 0;}};
     return (-1.0*f->getData(pos+2*dir) + 8.0*f->getData(pos+dir) - 8.0*f->getData(pos-dir) + f->getData(pos-2*dir))/(12.0*spacing[wrt]);*/
 }
 
 template <class T>
 inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) {
-	if(wrt1 == wrt2)
-	{
-        int mult=1;
-        for(int i=1; i<=wrt1; i++){
-            mult *= size[i-1];
-        }
-
-        return (-1.0*f->data[point+2*mult] + 16.0*f->data[point+mult] - 30.0*f->data[point] + 16.0*f->data[point-mult]
-                - f->data[point-2*mult])/(12.0*spacing[wrt1]*spacing[wrt1]);
-
-	    /*for(int i = 0; i < dim; i++){ if(i == wrt1){dir[i] = 1;}else{dir[i] = 0;}};
-        return (-1.0*f->getData(pos+2*dir) + 16.0*f->getData(pos+dir) - 30.0*f->getData(pos) + 16.0*f->getData(pos-dir)
-                - f->getData(pos-2*dir))/(12.0*spacing[wrt1]*spacing[wrt1]);*/
-	}
-	else
-	{
-        int mult1=1;
-        int mult2=1;
+    if(setDerivatives){
         if(wrt1 > wrt2) {
+            return f->double_derivatives[wrt1 + dim*wrt2][point];
+        }else{
+            return f->double_derivatives[wrt2 + dim*wrt1][point];
+        }
+    }else {
+        if (wrt1 == wrt2) {
+            int mult = 1;
             for (int i = 1; i <= wrt1; i++) {
-                mult1 *= size[i - 1];
-                if (i == wrt2) { mult2 = mult1; }
+                mult *= size[i - 1];
             }
-        }
-        else{
-            for (int i = 1; i <= wrt2; i++) {
-                mult2 *= size[i - 1];
-                if (i == wrt1) { mult1 = mult2; }
+
+            return (-1.0 * f->data[point + 2 * mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                    16.0 * f->data[point - mult]
+                    - f->data[point - 2 * mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+
+            /*for(int i = 0; i < dim; i++){ if(i == wrt1){dir[i] = 1;}else{dir[i] = 0;}};
+            return (-1.0*f->getData(pos+2*dir) + 16.0*f->getData(pos+dir) - 30.0*f->getData(pos) + 16.0*f->getData(pos-dir)
+                    - f->getData(pos-2*dir))/(12.0*spacing[wrt1]*spacing[wrt1]);*/
+        } else {
+            int mult1 = 1;
+            int mult2 = 1;
+            if (wrt1 > wrt2) {
+                for (int i = 1; i <= wrt1; i++) {
+                    mult1 *= size[i - 1];
+                    if (i == wrt2) { mult2 = mult1; }
+                }
+            } else {
+                for (int i = 1; i <= wrt2; i++) {
+                    mult2 *= size[i - 1];
+                    if (i == wrt1) { mult1 = mult2; }
+                }
             }
+
+
+            int doub = mult1 + mult2;
+            int alt = mult1 - mult2;
+
+            return (f->data[point + 2 * doub] - 8.0 * f->data[point + mult1 + 2 * mult2] +
+                    8.0 * f->data[point - mult1 + 2 * mult2]
+                    - f->data[point - 2 * alt] - 8.0 * f->data[point + 2 * mult1 + mult2] + 64.0 * f->data[point + doub]
+                    - 64.0 * f->data[point - alt] + 8.0 * f->data[point - 2 * mult1 + mult2] +
+                    8.0 * f->data[point + 2 * mult1 - mult2]
+                    - 64.0 * f->data[point + alt] + 64.0 * f->data[point - doub] -
+                    8.0 * f->data[point - 2 * mult1 - mult2]
+                    - f->data[point + 2 * alt] + 8.0 * f->data[point + mult1 - 2 * mult2] -
+                    8.0 * f->data[point - mult1 - 2 * mult2]
+                    + f->data[point - 2 * doub]) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+
+            // old function (much slower!)
+            /*return (f->getData(pos+2*dir1+2*dir2) - 8.0*f->getData(pos+dir1+2*dir2) + 8.0*f->getData(pos-dir1+2*dir2)
+                    - f->getData(pos-2*dir1+2*dir2) - 8.0*f->getData(pos+2*dir1+dir2) +64.0*f->getData(pos+dir1+dir2)
+                    -64.0*f->getData(pos-dir1+dir2) + 8.0*f->getData(pos-2*dir1+dir2) + 8.0*f->getData(pos+2*dir1-dir2)
+                    - 64.0*f->getData(pos+dir1-dir2)+ 64.0*f->getData(pos-dir1-dir2) - 8.0*f->getData(pos-2*dir1-dir2)
+                    - f->getData(pos+2*dir1-2*dir2) + 8.0*f->getData(pos+dir1-2*dir2) - 8.0*f->getData(pos-dir1-2*dir2)
+                    + f->getData(pos-2*dir1-2*dir2))/(144.0*spacing[wrt1]*spacing[wrt2]);*/
+
         }
-
-
-        int doub = mult1 + mult2;
-        int alt = mult1 - mult2;
-
-        return (f->data[point+2*doub] - 8.0*f->data[point+mult1+2*mult2] + 8.0*f->data[point-mult1+2*mult2]
-         - f->data[point-2*alt] - 8.0*f->data[point+2*mult1+mult2] +64.0*f->data[point+doub]
-         -64.0*f->data[point-alt] + 8.0*f->data[point-2*mult1+mult2] + 8.0*f->data[point+2*mult1-mult2]
-         - 64.0*f->data[point+alt]+ 64.0*f->data[point-doub] - 8.0*f->data[point-2*mult1-mult2]
-         - f->data[point+2*alt] + 8.0*f->data[point+mult1-2*mult2] - 8.0*f->data[point-mult1-2*mult2]
-         + f->data[point-2*doub])/(144.0*spacing[wrt1]*spacing[wrt2]);
-
-        // old function (much slower!)
-        /*return (f->getData(pos+2*dir1+2*dir2) - 8.0*f->getData(pos+dir1+2*dir2) + 8.0*f->getData(pos-dir1+2*dir2)
-                - f->getData(pos-2*dir1+2*dir2) - 8.0*f->getData(pos+2*dir1+dir2) +64.0*f->getData(pos+dir1+dir2)
-                -64.0*f->getData(pos-dir1+dir2) + 8.0*f->getData(pos-2*dir1+dir2) + 8.0*f->getData(pos+2*dir1-dir2)
-                - 64.0*f->getData(pos+dir1-dir2)+ 64.0*f->getData(pos-dir1-dir2) - 8.0*f->getData(pos-2*dir1-dir2)
-                - f->getData(pos+2*dir1-2*dir2) + 8.0*f->getData(pos+dir1-2*dir2) - 8.0*f->getData(pos-dir1-2*dir2)
-                + f->getData(pos-2*dir1-2*dir2))/(144.0*spacing[wrt1]*spacing[wrt2]);*/
-
-	}
+    }
 }
 
 void BaseFieldTheory::updateEnergy() { // only currently for 2-dim's!
@@ -834,6 +1158,12 @@ inline void BaseFieldTheory::RK4calc(int i){
 
 
     void BaseFieldTheory::gradientFlow(int iterations, int often, bool normalise){
+    if(dynamic){
+        cout << "Warning! You have run gradient flow on a dynamic theory, this will kill the kinetic componenet!\n";
+        for(int i = 0; i < getTotalSize(); i++){
+            fields.cutKinetic(i);
+        }
+    }
     int no = 0;
     double sum = 0.0;
     #pragma omp parallel
@@ -902,12 +1232,46 @@ inline void BaseFieldTheory::calculateGradientFlow(int pos){
 }
 
 void BaseFieldTheory::save(const char * savepath){
-    cout << "You havent yet written a save function!\n";
+    cout << "saving " << object_name << "to file " <<savepath << "\n";
+    ofstream outf(savepath);
+    //first output the derived class name to ensure loading the correct theory type!
+    //first output dimensions of the field theory!
+    for(int i = 0; i < dim; i++) {
+        outf << size[i] << " " ;
+    }
+    cout << "\n";
+    //second output the parameters of the field theory
+    for(int i = 0; i < parameters.size(); i++) {
+        outf << parameters[i] << " " ;
+    }
+    cout << "\n";
+    //third output the fields (this will determine autmatically if dynamic and need to output the time derivative also)
+    fields.save_fields(outf);
+    //close the file
+    outf.close();
+    cout << "Saving complete!\n";
 }
 
 
 void BaseFieldTheory::load(const char * loadpath){
-    cout << "You havent yet written a load function!\n";
+    cout << "loading " << object_name << "from file " << loadpath << "\n";
+    ifstream infile(loadpath);
+    //first load the derived class name to ensure loading the correct theory type!
+    //first load dimensions of the field theory!
+    for(int i = 0; i < dim; i++){
+        infile >> size[i];
+    }
+    // and resize the theory to the loaded dimensions
+        fields.resize(size());
+    //second load the parameters of the field theory
+    for(int i = 0; i < parameters.size(); i++){
+        infile >> parameters[i];
+    }
+    //third load the fields (this will determine autmatically if dynamic and need to output the time derivative also)
+    fields.load_fields(infile);
+    //close the file
+    infile.close();
+    cout << "loading completed!\n";
 }
 
 }
