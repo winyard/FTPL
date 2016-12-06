@@ -1,36 +1,86 @@
-//#include "FieldTheories.hpp"
-
+//#include "BabySkyrme.hpp"
 #include "Skyrme.hpp"
 
 int main() {
 
     Eigen::initParallel();
-    cout << "creating\n";
-    FTPL::SkyrmeModel my_model(45, 45, 45, false);
+
+    FTPL::SkyrmeModel my_model(100, 100, 100, false);
     cout << "created!\n";
     Eigen::Vector4d input(1, 0, 0, 0);
     my_model.f->fill(input);
 
-    double space = 0.2;
+    double space = 0.05;
     my_model.setSpacing({space, space, space});
-    my_model.setParameters(8.0,0.5,0.0);
+    my_model.setParameters(sqrt(8.0),sqrt(0.5),0.0);
 
+    my_model.setTimeInterval(0.5*space);
     cout << "do initial conditions\n";
     my_model.initialCondition(1, 0, 0, 0, 0);
-    cout << "now clac eneergy\n";
+    cout << "now clac energy\n";
     my_model.updateEnergy();
     cout << "Energy = " << my_model.getEnergy() << "\n";
+    my_model.updateCharge();
+    cout << "Charge = " << my_model.getCharge() << "\n";
 
 
-    my_model.setTimeInterval(0.1*space*space*space);
-    cout << "Running Gradient Flow:\n";
+    cout << "Time to test the anealing method!\n";
     Timer tmr;
-    my_model.gradientFlow(100000, 10, true);
-    cout << "1000 loops finished in " <<tmr.elapsed() << " sec\n";
+    my_model.annealing(1000000000,1000000,true);
+    cout << "10 loops finished in " <<tmr.elapsed() << " sec\n";
+    cout << "ALL DONE!!\n";
 
-   /* Eigen::initParallel();
-    cout << "creating\n";
-    FTPL::BabySkyrmeModel my_model(200, 200, true);
+ /*   FTPL::SkyrmeModel my_model(100, 100, 100, true);
+
+    Eigen::Vector4d input(1, 0, 0, 0);
+    my_model.f->fill(input);
+
+    double space = 0.1;
+    my_model.setSpacing({space, space, space});
+    my_model.setParameters(sqrt(8.0),sqrt(0.5),0.0);
+
+    my_model.setTimeInterval(0.2*space);
+    my_model.initialCondition(1, 0, 0, 0, 0);
+
+    my_model.updateEnergy();
+    cout << "Energy = " << my_model.getEnergy() << "\n";
+    my_model.updateCharge();
+    cout << "Charge = " << my_model.getCharge() << "\n";
+
+    Timer tmr;
+    my_model.RK4(10,true,true,10);
+    cout << "1000 loops finished in " <<tmr.elapsed() << " sec\n";
+    my_model.setTimeInterval(0.5*space*space*space);
+    my_model.gradientFlow(100, 10, true);
+    cout << "ALL DONE!!\n";
+
+
+   /* FTPL::BabySkyrmeModel my_model(200, 200, true);
+
+    Eigen::Vector3d input(0, 0, 1);
+    my_model.f->fill(input);
+
+    double space = 0.2;
+    my_model.setSpacing({space, space});
+    my_model.setParameters(1.0,sqrt(0.1));
+
+    my_model.setTimeInterval(0.5*space);
+    my_model.initialCondition(1, 0, 0, 0);
+
+    my_model.updateEnergy();
+    cout << "Energy = " << my_model.getEnergy() << "\n";
+    my_model.updateCharge();
+    cout << "Charge = " << my_model.getCharge() << "\n";
+
+    Timer tmr;
+    my_model.RK4(1000,true,true,1);
+    cout << "1000 loops finished in " <<tmr.elapsed() << " sec\n";
+    my_model.setTimeInterval(0.5*space*space*space);
+    my_model.gradientFlow(100, 10, true);
+    cout << "ALL DONE!!\n";
+
+
+/*    FTPL::BabySkyrmeModel my_model(100, 100, false);
     cout << "created!\n";
     Eigen::Vector3d input(0, 0, 1);
     my_model.f->fill(input);
@@ -40,16 +90,23 @@ int main() {
     my_model.setParameters(1.0,sqrt(0.1));
 
     my_model.setTimeInterval(0.5*space);
-cout << "do initial conditions\n";
+    cout << "do initial conditions\n";
     my_model.initialCondition(1, 0, 0, 0);
-    cout << "now clac eneergy\n";
+    cout << "now clac energy\n";
     my_model.updateEnergy();
     cout << "Energy = " << my_model.getEnergy() << "\n";
     my_model.updateCharge();
     cout << "Charge = " << my_model.getCharge() << "\n";
 
 
-    cout << "Time to test the RK4 method!\n";
+    cout << "Time to test the anealing method!\n";
+    Timer tmr;
+    my_model.annealing(100000000,2000000,true);
+    cout << "10 loops finished in " <<tmr.elapsed() << " sec\n";
+    cout << "ALL DONE!!\n";
+
+
+    /*cout << "Time to test the RK4 method!\n";
     Timer tmr;
     my_model.RK4(1000,true,true,10);
     cout << "1000 loops finished in " <<tmr.elapsed() << " sec\n";

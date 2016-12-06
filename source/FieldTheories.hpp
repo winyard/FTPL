@@ -39,6 +39,7 @@ private:
 using namespace std;
 
 namespace FTPL {
+    class BaseFieldTheory;
 /***********************/
 /*       FIELDS        */
 /***********************/
@@ -54,6 +55,8 @@ class Field {
         vector<T> k1_result;
         vector<vector<T>> single_derivatives;
         vector<vector<vector<T>>> double_derivatives;
+        T min;
+        T max;
         bool dynamic;
 	    int dim;
         inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
@@ -79,6 +82,7 @@ class Field {
         void resize(vector<int> sizein);
         void progressTime(double time_step);
         void update_derivatives(vector<double> spacing);
+        void alter_point(int i, T value, vector<double> spacing);
     protected:
 		vector<int>  size;
         vector<vector<T>> k_sum;
@@ -88,11 +92,11 @@ template<class T>
     void Field<T>::alter_point(int i, T value, vector<double> spacing){
         buffer[i] = data[i];
         data[i] = value;
-        double dif = data[i]-buffer[i];
+        T dif = data[i]-buffer[i];
         //now correct the derivatives:
         double mult1 = 1.0;
         for(int wrt1 = 0; wrt1<dim; wrt1++){
-            double change = dif/(12.0*spacing[wrt1]);
+            T change = dif/(12.0*spacing[wrt1]);
             single_derivatives[wrt1][i-2*mult1] += -change;
             single_derivatives[wrt1][i-1*mult1] += 8.0*change;
             single_derivatives[wrt1][i+1*mult1] += -8.0*change;
@@ -105,7 +109,7 @@ template<class T>
             double_derivatives[wrt1][wrt1][i+2*mult1] += -change;
             double mult2 = 1.0;
             for(int wrt2=0; wrt2<wrt1; wrt2++) {
-                double change = dif/(144.0*spacing[wrt1]*spacing[wrt2]);
+                change = dif/(144.0*spacing[wrt1]*spacing[wrt2]);
                 double_derivatives[wrt2][wrt1][i-2*mult2-2*mult1] += change;
                 double_derivatives[wrt2][wrt1][i-mult2-2*mult1] += -8.0*change;
                 double_derivatives[wrt2][wrt1][i+mult2-2*mult1] += 8.0*change;
@@ -360,8 +364,8 @@ class TargetSpace {
         Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic);
         Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic);
         void resize(vector<int> sizein);
-        void load_fields(ifstream& loadfile);
-        void save_fields(ofstream& savefile);
+        void load_fields(ifstream& loadfile, int totalSize);
+        void save_fields(ofstream& savefile, int totalSize);
         void update_fields();
         void update_gradients(double dt);
         void update_RK4(int k, int pos);
@@ -380,139 +384,205 @@ class TargetSpace {
         std::vector<Field<Eigen::MatrixXd>> fields4;
 };
 
-    template<class T>
-    Field<T> * TargetSpace::randomise(int i, int field, vector<double> spacing, bool normalise){
+    class BaseFieldTheory {
+    public:
+        int dim;
+        BaseFieldTheory(int d, vector<int> size, bool isDynamic); // TO BE WRITTEN
+        ~BaseFieldTheory(){};
+        inline vector<int> next(vector<int> current);
+        inline vector<int>  __attribute__((always_inline)) convert(int in);
+        inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
+        inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
+        inline virtual void __attribute__((always_inline)) RK4calc(int i);
+        inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
+        void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
+        void save(const char * savepath); // TO BE WRITTEN
+        void load(const char * loadpath); // TO BE WRITTEN
+        void plot(const char * plotpath); // TO BE WRITTEN
+        void spaceTransformation(); // TO BE WRITTEN
+        template <class T>
+        void fieldTransformation(T tranformation); // TO BE WRITTEN
+        void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
+        void setStandardMetric(string type);
+        void updateEnergy(); // TO BE WRITTEN
+        void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
+        void setTimeInterval(double dt_in);
+        double getEnergy(){return energy;};
+        inline bool inBoundary(vector<int> pos);
+        inline bool inBoundary(int pos);
+        inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
+        inline  void setSpacing(vector<double> spacein);
+        void addParameter( double * parameter_in);
+        vector<double> getSpacing();
+        int getTotalSize();
+        double getTotalSpacing();
+        void setMetricType(string type);
+        void annealing(int iterations, int often, bool normalise = false);
+        template <class T>
+        inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
+        template <class T>
+        inline T single_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
+        template <class T>
+        inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
+    protected:
+        int metric_type = 0;
+        template <class T>
+        Field<T> * createField(Field<T> * target, bool isDynamic);
+        //vector<unique_ptr<Field>> fields;
+        TargetSpace fields;
+        vector<int> bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
+        vector<int> boundarytype; // indicates the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
+        vector<double> energydensity;
+        double energy, potential, kinetic;
+        vector<double> spacing;
+        vector<int> size;
+        double dt;
+        bool dynamic;
+        bool curved = false;
+        bool setDerivatives = false;
+        vector<double *> parameters;
+    };
+
+    void TargetSpace::randomise(int i, int field, vector<double> spacing, bool normalise){
         std::random_device rd;
         std::mt19937 mt(rd());
-        if(i <= fields1.size()-1){
-            Eigen::vectorXd value = fields1.data[i];
+        if(field <= fields1.size()-1){
+            Eigen::VectorXd value = fields1[field].data[i];
             for(int j = 0; j < value.size(); j++){
-                std::uniform_real_distribution<double> dist(fields1.min[j], fields1.max[j]);
-                value[j] = dist(mt);
+                std::uniform_real_distribution<double> dist(fields1[field].min[j], fields1[field].max[j]);
+                value[j] = fields1[field].data[i][j] + dist(mt);
             }
             if(normalise){
                 value.normalize();
             }
-            fields1[i].alterPoint(i,value,spacing);
+            fields1[field].alter_point(i,value,spacing);
         }
-        else if(i <= fields1.size() + fields2.size() - 1){
-            std::uniform_real_distribution<double> dist(fields2.min, fields2.max);
+        else if(field <= fields1.size() + fields2.size() - 1){
+            std::uniform_real_distribution<double> dist(fields2[field - fields1.size()].min, fields2[field - fields1.size()].max);
             double value = dist(mt);
-            fields1[i].alterPoint(i,value,spacing);
+            fields2[field - fields1.size()].alter_point(i,value,spacing);
         }
-        else if(i <= fields1.size() + fields2.size() +fields3.size() -1){
-            std::uniform_int_distribution<int> dist(fields3.min, fields3.max);
+        else if(field<= fields1.size() + fields2.size() +fields3.size() -1){
+            std::uniform_int_distribution<int> dist(fields3[field - fields1.size() - fields2.size()].min, fields3[field - fields1.size() - fields2.size()].max);
             int value = dist(mt);
-            fields3[i].alterPoint(i,value,spacing);
+            fields3[field - fields1.size() - fields2.size()].alter_point(i,value,spacing);
         }
         else{
-            Eigen::MatrixXd value = fields4.data[i];
+            Eigen::MatrixXd value = fields4[field - fields1.size() - fields2.size()  - fields3.size()].data[i];
             for(int j = 0; j < value.rows(); j++){
                 for(int k = 0; k < value.cols(); k++){
-                    std::uniform_real_distribution<double> dist(fields4.min[j][k], fields4.max[j][k]);
+                    std::uniform_real_distribution<double> dist(fields4[field - fields1.size() - fields2.size()  - fields3.size()].min(j,k), fields4[field - fields1.size() - fields2.size()  - fields3.size()].max(j,k));
                     value(j,k) = dist(mt);
             }}
             if(normalise){
                 value.normalize();
             }
-            fields4[i].alterPoint(i,value,spacing);
+            fields4[field - fields1.size() - fields2.size()  - fields3.size()].alter_point(i,value,spacing);
         }
     }
 
-    template<class T>
-    Field<T> * TargetSpace::derandomise(int i, int field, vector<double> spacing){
-        if(i <= fields1.size()-1){
-                fields1[i].alterPoint(i,fields1.buffer[i],spacing);
+    void TargetSpace::derandomise(int i, int field, vector<double> spacing){
+        if(field <= fields1.size()-1){
+                fields1[field].alter_point(i,fields1[field].buffer[i],spacing);
         }
-        else if(i <= fields1.size() + fields2.size() - 1){
-                fields2[i].alterPoint(i,fields2.buffer[i],spacing);
+        else if(field <= fields1.size() + fields2.size() - 1){
+                int point = field - fields1.size();
+                fields2[point].alter_point(i,fields2[point].buffer[i],spacing);
         }
-        else if(i <= fields1.size() + fields2.size() +fields3.size() -1){
-                fields3[i].alterPoint(i,fields3.buffer[i],spacing);
+        else if(field <= fields1.size() + fields2.size() +fields3.size() -1){
+            int point = field - fields1.size() - fields2.size();
+                fields3[point].alter_point(i,fields3[point].buffer[i],spacing);
         }
         else{
-                fields4[i].alterPoint(i,fields4.buffer[i],spacing);
+                int point = field - fields1.size() - fields2.size() - fields3.size();
+                fields4[point].alter_point(i,fields4[point].buffer[i],spacing);
         }
     }
 
 
 
-    void storeDerivatives(BaseFieldTheory * theory){
+    void TargetSpace::storeDerivatives(BaseFieldTheory * theory){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].single_derivative.resize(theory->dim);
-            fields1[i].double_derivative.resize(theory->dim);
+            fields1[i].single_derivatives.resize(theory->dim);
+            fields1[i].double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields1[i].single_derivative.resize(theory->getTotalSize());
-                fields1[i].double_derivative[j].resize(theory->dim);
+                fields1[i].single_derivatives[j].resize(theory->getTotalSize());
+                fields1[i].double_derivatives[j].resize(theory->dim);
                 for(int k = j; k < theory->dim; k++ ) {
                     fields1[i].double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
-                for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
-                    fields1[i].single_derivative[wrt1]=theory->single_derivative(&fields1[i],wrt1,j);
-                    for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
-                        fields1[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields1[i],wrt1,wrt2,j);
+            if (theory->inBoundary(j)) {
+                for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
+                    fields1[i].single_derivatives[wrt1][j] = theory->single_derivative(&fields1[i], wrt1, j);
+                    for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
+                        fields1[i].double_derivatives[wrt1][wrt2][j] = theory->double_derivative(&fields1[i], wrt1,
+                                                                                                 wrt2, j);
                     }
                 }
             }
+            }
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].single_derivative.resize(theory->dim);
-            fields2[i].double_derivative.resize(theory->dim);
+            fields2[i].single_derivatives.resize(theory->dim);
+            fields2[i].double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields2[i].single_derivative.resize(theory->getTotalSize());
-                fields2[i].double_derivative[j].resize(theory->dim);
-                for(int k = j; k < dim; k++ ) {
+                fields2[i].single_derivatives[j].resize(theory->getTotalSize());
+                fields2[i].double_derivatives[j].resize(theory->dim);
+                for(int k = j; k < theory->dim; k++ ) {
                     fields2[i].double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
+            if (theory->inBoundary(j)) {
                 for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
-                    fields2[i].single_derivative[wrt1]=theory->single_derivative(&fields2[i],wrt1,j);
+                    fields2[i].single_derivatives[wrt1][j]=theory->single_derivative(&fields2[i],wrt1,j);
                     for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
-                        fields2[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields2[i],wrt1,wrt2,j);
+                        fields2[i].double_derivatives[wrt1][wrt2][j]=theory->double_derivative(&fields2[i],wrt1,wrt2,j);
                     }
                 }
-            }
+            }}
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].single_derivative.resize(theory->dim);
-            fields3[i].double_derivative.resize(theory->dim);
+            fields3[i].single_derivatives.resize(theory->dim);
+            fields3[i].double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields3[i].single_derivative.resize(theory->getTotalSize());
-                fields3[i].double_derivative[j].resize(theory->dim);
-                for(int k = j; k < dim; k++ ) {
+                fields3[i].single_derivatives[j].resize(theory->getTotalSize());
+                fields3[i].double_derivatives[j].resize(theory->dim);
+                for(int k = j; k < theory->dim; k++ ) {
                     fields3[i].double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
+            if (theory->inBoundary(j)) {
                 for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
-                    fields3[i].single_derivative[wrt1]=theory->single_derivative(&fields3[i],wrt1,j);
+                    fields3[i].single_derivatives[wrt1][j]=theory->single_derivative(&fields3[i],wrt1,j);
                     for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
-                        fields3[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields3[i],wrt1,wrt2,j);
+                        fields3[i].double_derivatives[wrt1][wrt2][j]=theory->double_derivative(&fields3[i],wrt1,wrt2,j);
                     }
                 }
-            }
+            }}
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].single_derivative.resize(theory->dim);
-            fields4[i].double_derivative.resize(theory->dim);
+            fields4[i].single_derivatives.resize(theory->dim);
+            fields4[i].double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields4[i].single_derivative.resize(theory->getTotalSize());
-                fields4[i].double_derivative[j].resize(theory->dim);
-                for(int k = j; k < dim; k++ ) {
+                fields4[i].single_derivatives[j].resize(theory->getTotalSize());
+                fields4[i].double_derivatives[j].resize(theory->dim);
+                for(int k = j; k < theory->dim; k++ ) {
                     fields4[i].double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
+            if (theory->inBoundary(j)) {
                 for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
-                    fields4[i].single_derivative[wrt1]=theory->single_derivative(&fields4[i],wrt1,j);
+                    fields4[i].single_derivatives[wrt1][j]=theory->single_derivative(&fields4[i],wrt1,j);
                     for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
-                        fields4[i].double_derivative[wrt1][wrt2]=theory->double_derivative(&fields4[i],wrt1,wrt2,j);
+                        fields4[i].double_derivatives[wrt1][wrt2][j]=theory->double_derivative(&fields4[i],wrt1,wrt2,j);
                     }
                 }
-            }
+            }}
         }
     }
 
@@ -622,59 +692,59 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
 
 
 
-    void TargetSpace::save_fields(ofstream& savefile){
+    void TargetSpace::save_fields(ofstream& savefile, int totalSize){
         for(int i = 0; i < fields1.size(); i++){
-            for(int j =0; j < getTotalsize(); j++) {
-                for(k = 0; k < fields1[i].size(); k++) {
-                    savefile << fields1[j](k) << " ";
+            for(int j =0; j < totalSize; j++) {
+                for(int k = 0; k < fields1[i].data[j].size(); k++) {
+                    savefile << fields1[i].data[j](k) << " ";
                 }
                 savefile << "\n";
             }
         }
         for(int i = 0; i < fields2.size(); i++){
-            for(int j =0; j < getTotalsize(); j++) {
-                savefile << fields2[j] << "\n";
+            for(int j =0; j < totalSize; j++) {
+                savefile << fields2[i].data[j] << "\n";
             }
         }
         for(int i = 0; i < fields3.size(); i++){
-            for(int j =0; j < getTotalsize(); j++) {
-                savefile << fields3[j] << "\n";
+            for(int j =0; j < totalSize; j++) {
+                savefile << fields3[i].data[j] << "\n";
             }
         }
         for(int i = 0; i < fields4.size(); i++){
-            for(int j =0; j < getTotalsize(); j++) {
-                for(k = 0; k < fields4[i].rows(); k++) {
-                for(h = 0; h < fields4[i].cols(); h++){
-                    savefile << fields4[j](k,h) << " ";
+            for(int j =0; j < totalSize; j++) {
+                for(int k = 0; k < fields4[i].data[j].rows(); k++) {
+                for(int h = 0; h < fields4[i].data[j].cols(); h++){
+                    savefile << fields4[i].data[j](k,h) << " ";
                 }}
                 savefile << "\n";
             }
         }
     }
 
-    void TargetSpace::load_fields(ifstream& loadfile){
+    void TargetSpace::load_fields(ifstream& loadfile, int totalSize){
         for(int i = 0; i < fields1.size(); i++){
-            for(int j =0; j < getTotalsize(); j++){
-                for(k = 0; k < fields1[i].size(); k++){
-                   loadfile >> fields1[j](k);
+            for(int j =0; j < totalSize; j++){
+                for(int k = 0; k < fields1[i].data[j].size(); k++){
+                   loadfile >> fields1[i].data[j](k);
                 }
             }
         }
         for(int i = 0; i < fields2.size(); i++){
-            for(int j =0; j < getTotalsize(); j++){
-                loadfile >> fields2[j];
+            for(int j =0; j < totalSize; j++){
+                loadfile >> fields2[i].data[j];
             }
         }
         for(int i = 0; i < fields3.size(); i++){
-            for(int j =0; j < getTotalsize(); j++){
-                loadfile >> fields3[j];
+            for(int j =0; j < totalSize; j++){
+                loadfile >> fields3[i].data[j];
             }
         }
         for(int i = 0; i < fields4.size(); i++){
-            for(int j =0; j < getTotalsize(); j++) {
-                for(k = 0; k < fields4[i].rows(); k++){
-                for(h = 0; h < fields4[i].cols(); h++){
-                    loadfile >> fields4[j](k,h);
+            for(int j =0; j < totalSize; j++) {
+                for(int k = 0; k < fields4[i].data[j].rows(); k++){
+                for(int h = 0; h < fields4[i].data[j].cols(); h++){
+                    loadfile >> fields4[i].data[j](k,h);
                 }}
             }
         }
@@ -728,99 +798,37 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
 /*   Field Theories    */
 /***********************/
 
-class BaseFieldTheory {
-   public:
-	int dim;
-	BaseFieldTheory(int d, vector<int> size, bool isDynamic); // TO BE WRITTEN
-	~BaseFieldTheory(){};
-    inline vector<int> next(vector<int> current);
-    inline vector<int>  __attribute__((always_inline)) convert(int in);
-    inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
-    inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
-    inline virtual void __attribute__((always_inline)) RK4calc(int i);
-    inline virtual double __attribute__((always_inline)) metric(int i, int j);
-    void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
-	void save(const char * savepath); // TO BE WRITTEN
-	void load(const char * loadpath); // TO BE WRITTEN
-	void plot(const char * plotpath); // TO BE WRITTEN
-	void spaceTransformation(); // TO BE WRITTEN
-    template <class T>
-	void fieldTransformation(T tranformation); // TO BE WRITTEN
-	void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
-    void setStandardMetric(string type);
-    template<class T>
-    void annealing(int iterations, bool normalise);
-	void updateEnergy(); // TO BE WRITTEN
-    void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
-    void setTimeInterval(double dt_in);
-    double getEnergy(){return energy;};
-    inline bool inBoundary(vector<int> pos);
-    inline bool inBoundary(int pos);
-    inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
-    inline  void setSpacing(vector<double> spacein);
-    void addParameter( double * parameter_in);
-    vector<double> getSpacing();
-    int getTotalSize();
-    double getTotalSpacing();
-    template <class T>
-    inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
-	template <class T>
-	inline T single_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
-	template <class T>
-    inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
-   protected:
-    int metric_type = 0;
-	template <class T>
-	Field<T> * createField(Field<T> * target, bool isDynamic);
-	//vector<unique_ptr<Field>> fields;
-    TargetSpace fields;
-	vector<int> bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
-	vector<int> boundarytype; // indicates the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
-	vector<double> energydensity;
-	double energy, potential, kinetic;
-	vector<double> spacing;
-	vector<int> size;
-    double dt;
-    bool dynamic;
-    bool curved = false;
-    bool setDerivatives = false;
-    vector<*double> parameters;
-};
-
-    double BaseFieldTheory::metric(int i, int j, vector<double> pos = {0}){
+    double BaseFieldTheory::metric(int i, int j, vector<double> pos){
         Eigen::MatrixXd g;
-        Eigen::Matrix1d gtt;
-        switch(metric_type){
-            case 0: if(i == j){return 1.0}else{return 0.0;};
-            case 1:
-            case 2:
-            case 3:
-            case 4: double r=0.0;
-                    for(int i = 0; i < dim; i++){
-                        r += pos[i]*pos[i];
-                    }
-                    r = sqrt(r);
-                    r = 4.0/(1.0 - r);
-                    for(int i = 0; i < dim; i++){
-                    for(int i = 0; i < dim; i++){
-                        if(i==j){g[i][j]=r;}
-                        else{g[i][j] = 0.0;}
-                    }}
-                    gtt = 1.0;
-                    return {gtt, g};
-            case 5:if(i==j){
-                    double r=0.0;
-                    for(int i = 0; i < dim; i++){
-                        r += pos[i]*pos[i];
-                    }
-                    r = sqrt(r);
-                    double gtt = -1.0*(-pow((1.0 + pow(r,2))/(1.0 - pow(r,2)),2));
-                    double gsqrt = (8.0/(pow(1.0 - (x*x + y*y)/pow(radius,2),3)))*sqrt(1.0/gtt);
+        double gtt;
+       /* switch(metric_type) {
+            case 0:
+                if (i == j) { return 1.0; }
+                else { return 0.0; };
+            case 1: return 0.0;
+            case 2: return 0.0;
+            case 3: return 0.0;
+            case 4:
+                double r = 0.0;
+                for (int i = 0; i < dim; i++) {
+                    r += pos[i] * pos[i];
                 }
-        }
+                r = sqrt(r);
+                r = 4.0 / (1.0 - r);
+                if (i == j) {return r;} else {return 0.0;};
+            case 5:
+                double r = 0.0;
+                for (int i = 0; i < dim; i++) {
+                    r += pos[i] * pos[i];
+                }
+                r = sqrt(r);
+                r = 4.0 / (1.0 - r);
+                if (i == j) { return r; } else { return 0.0; };
+        }*/
+        return 0.0;
     }
 
-    void BaseFieldTheory::SetMetricType(string type){
+    void BaseFieldTheory::setMetricType(string type){
         if(type == "flat"){metric_type = 0; curved = false;}
         else if(type == "polar"){metric_type = 1; curved = true;}
         else if(type == "spherical"){metric_type = 2; curved = true;}
@@ -835,7 +843,7 @@ class BaseFieldTheory {
         parameters.push_back(parameter_in);
     }
 
-void BaseFieldTheory::annealing(int iterations, bool normalise){
+void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
     if(dynamic){
         cout << "Warning! You have run annealing on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
@@ -843,33 +851,141 @@ void BaseFieldTheory::annealing(int iterations, bool normalise){
         }
     }
     updateEnergy();
-    fields.storeDerivatives(*this);
+    int seperator = 2*getTotalSize()/size[dim-1];
+    fields.storeDerivatives(this);
     setDerivatives = true;
+    updateEnergy();
     std::random_device rd;
     std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> p_rand(0, getTotalSize());
-    std::uniform_int_distribution<int> f_rand(0, fields.no_fields);
+    std::uniform_int_distribution<int> f_rand(0, fields.no_fields-1);
+    #pragma omp parallel
+    {
+        int sep = getTotalSize()/omp_get_num_threads();
+        double newEnergy;
+        double oldEnergy;
+        double newEnergyDensity[1+2*dim+4*dim*dim];
+        int store = 0;
+        std::uniform_int_distribution<int> p_rand(omp_get_thread_num()*sep,omp_get_thread_num()*sep + sep - 1 );
+        for (int no = 0; no < iterations; no++) {
+            int pos = -1;
+            while (!inBoundary(pos)) {
+                pos = p_rand(mt);// correct to right random no. generator
+            }
+            int field = f_rand(mt); // correct for int random no. generator
+            fields.randomise(pos, field, spacing, normalise);
+            newEnergy = calculateEnergy(pos);
+            oldEnergy = energydensity[pos];
+            int store = 0;
+            newEnergyDensity[store] = calculateEnergy(pos);
+            double mult1 = 1.0;
+            for (int i = 0; i < dim; i++) {
+                store++;
+                int point = pos + mult1;
+                if (inBoundary(point)) {
+                    newEnergyDensity[store] = calculateEnergy(point);
+                    newEnergy += newEnergyDensity[store];
+                    oldEnergy += energydensity[point];
+                }
+                store++;
+                point = pos - mult1;
+                if (inBoundary(point)) {
+                    newEnergyDensity[store] = calculateEnergy(point);
+                    newEnergy += newEnergyDensity[store];
+                    oldEnergy += energydensity[point];
+                }
+                double mult2 = 1.0;
+                for (int j = 0; j <= i; j++) {
+                    store++;
+                    point = pos + mult1 + mult2;
+                    if (inBoundary(point)) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+                    store++;
+                    point = pos - mult1 - mult2;
+                    if (inBoundary(point)) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+                    if(i != j) {
+                        store++;
+                        point = pos + mult1 - mult2;
+                        if (inBoundary(point)) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+                        store++;
+                        point = pos - mult1 + mult2;
+                        if (inBoundary(point)) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+                    }
+                    mult2 *= size[j];
+                }
+            mult1 *= size[i];
+            }
+            if (newEnergy > oldEnergy) { // add some heat term! :) - as well as some fall off
+                fields.derandomise(pos, field, spacing);
+            } else {
+                store = 0;
+                energydensity[pos] = newEnergyDensity[store];
+                double mult1 = 1.0;
+                for (int i = 0; i < dim; i++) {
+                    store++;
+                    int point = pos + mult1;
+                    if (inBoundary(point)) {
+                        energydensity[point] = newEnergyDensity[store];
+                    }
+                    store++;
+                    point = pos - mult1;
+                    if (inBoundary(point)) {
+                        energydensity[point] = newEnergyDensity[store];
+                    }
+                    double mult2 = 1.0;
+                    for (int j = 0; j <= i; j++) {
+                        store++;
+                        point = pos + mult1 + mult2;
+                        if (inBoundary(point)) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+                        store++;
+                        point = pos - mult1 - mult2;
+                        if (inBoundary(point)) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+                        if(i != j) {
+                            store++;
+                            point = pos + mult1 - mult2;
+                            if (inBoundary(point)) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+                            store++;
+                            point = pos - mult1 + mult2;
+                            if (inBoundary(point)) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+                        }
+                        mult2 *= size[j];
+                    }
+                mult1 *= size[i];
+                }
 
-    for(int no = 0; no < iterations; no++){
-        int pos = p_rand(mt);// correct to right random no. generator
-        int field = f_rand(mt); // correct for int random no. generator
-        fields.randomise(pos, field, spacing, normalise);
-        double multiplier = 1.0;
-        double newEnergy = calculateEnergy(i);
-        double oldEnergy = energydensity[i];
-        for(int i = 0; i<dim; i++){
-            newEnergy += calculateEnergy(i+2*multiplier);
-            oldEnergy += energydensity[i+2*multiplier];
-            newEnergy += calculateEnergy(i+multiplier);
-            oldEnergy += energydensity[i+multiplier];
-            newEnergy += calculateEnergy(i-multiplier);
-            oldEnergy += energydensity[i-multiplier];
-            newEnergy += calculateEnergy(i-2*multiplier);
-            oldEnergy += energydensity[i-2*multiplier];
-            multiplier *= size[j];
-        }
-        if(newEnergy > oldEnergy){ // add some heat term! :) - as well as some fall off
-            fields.derandomise(pos,field, spacing);
+                }
+
+            if (no % often == 0) {
+                #pragma omp barrier
+                #pragma omp master
+                {
+                    updateEnergy();
+                    cout << no << ": the energy so far is " << energy << "\n";
+                }
+                #pragma omp barrier
+                }
         }
     }
     setDerivatives = false;
@@ -1049,9 +1165,9 @@ template <class T>
 inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) {
     if(setDerivatives){
         if(wrt1 > wrt2) {
-            return f->double_derivatives[wrt1 + dim*wrt2][point];
+            return f->double_derivatives[wrt2][wrt1][point];
         }else{
-            return f->double_derivatives[wrt2 + dim*wrt1][point];
+            return f->double_derivatives[wrt1][wrt2][point];
         }
     }else {
         if (wrt1 == wrt2) {
@@ -1232,7 +1348,7 @@ inline void BaseFieldTheory::calculateGradientFlow(int pos){
 }
 
 void BaseFieldTheory::save(const char * savepath){
-    cout << "saving " << object_name << "to file " <<savepath << "\n";
+    cout << "saving to file " <<savepath << "\n";
     ofstream outf(savepath);
     //first output the derived class name to ensure loading the correct theory type!
     //first output dimensions of the field theory!
@@ -1246,7 +1362,7 @@ void BaseFieldTheory::save(const char * savepath){
     }
     cout << "\n";
     //third output the fields (this will determine autmatically if dynamic and need to output the time derivative also)
-    fields.save_fields(outf);
+    fields.save_fields(outf, getTotalSize());
     //close the file
     outf.close();
     cout << "Saving complete!\n";
@@ -1254,7 +1370,7 @@ void BaseFieldTheory::save(const char * savepath){
 
 
 void BaseFieldTheory::load(const char * loadpath){
-    cout << "loading " << object_name << "from file " << loadpath << "\n";
+    cout << "loading from file " << loadpath << "\n";
     ifstream infile(loadpath);
     //first load the derived class name to ensure loading the correct theory type!
     //first load dimensions of the field theory!
@@ -1262,13 +1378,13 @@ void BaseFieldTheory::load(const char * loadpath){
         infile >> size[i];
     }
     // and resize the theory to the loaded dimensions
-        fields.resize(size());
+        fields.resize(size);
     //second load the parameters of the field theory
     for(int i = 0; i < parameters.size(); i++){
-        infile >> parameters[i];
+        infile >> *parameters[i];
     }
     //third load the fields (this will determine autmatically if dynamic and need to output the time derivative also)
-    fields.load_fields(infile);
+    fields.load_fields(infile, getTotalSize());
     //close the file
     infile.close();
     cout << "loading completed!\n";
