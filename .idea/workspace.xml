@@ -31,8 +31,18 @@
       <file leaf-file-name="BabySkyrme.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/source/BabySkyrme.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="200">
-              <caret line="104" column="0" lean-forward="true" selection-start-line="104" selection-start-column="0" selection-end-line="104" selection-end-column="0" />
+            <state relative-caret-position="1768">
+              <caret line="104" column="0" lean-forward="false" selection-start-line="104" selection-start-column="0" selection-end-line="104" selection-end-column="0" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="SkyrmeWithMeson.hpp" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/source/SkyrmeWithMeson.hpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="221">
+              <caret line="13" column="21" lean-forward="false" selection-start-line="13" selection-start-column="21" selection-end-line="13" selection-end-column="21" />
               <folding />
             </state>
           </provider>
@@ -41,18 +51,28 @@
       <file leaf-file-name="Skyrme.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/source/Skyrme.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="430">
-              <caret line="61" column="26" lean-forward="false" selection-start-line="61" selection-start-column="26" selection-end-line="61" selection-end-column="26" />
+            <state relative-caret-position="2669">
+              <caret line="157" column="30" lean-forward="false" selection-start-line="157" selection-start-column="30" selection-end-line="157" selection-end-column="30" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="FieldTheories.hpp" pinned="false" current-in-tab="true">
+      <file leaf-file-name="SakaiSugimoto.hpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/source/SakaiSugimoto.hpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="289">
+              <caret line="17" column="23" lean-forward="false" selection-start-line="17" selection-start-column="23" selection-end-line="17" selection-end-column="23" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="FieldTheories.hpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="578">
-              <caret line="829" column="172" lean-forward="false" selection-start-line="829" selection-start-column="172" selection-end-line="829" selection-end-column="172" />
+            <state relative-caret-position="935">
+              <caret line="55" column="53" lean-forward="false" selection-start-line="55" selection-start-column="53" selection-end-line="55" selection-end-column="53" />
               <folding>
                 <element signature="e#937#946#0" expanded="true" />
                 <element signature="e#2425#2434#0" expanded="true" />
@@ -153,9 +173,11 @@
         <option value="$PROJECT_DIR$/CMakeLists.txt" />
         <option value="$PROJECT_DIR$/source/main.cpp" />
         <option value="$PROJECT_DIR$/.gitignore" />
-        <option value="$PROJECT_DIR$/source/Skyrme.hpp" />
         <option value="$PROJECT_DIR$/source/BabySkyrme.hpp" />
         <option value="$PROJECT_DIR$/source/FieldTheories.hpp" />
+        <option value="$PROJECT_DIR$/source/Skyrme.hpp" />
+        <option value="$PROJECT_DIR$/source/SakaiSugimoto.hpp" />
+        <option value="$PROJECT_DIR$/source/SkyrmeWithMeson.hpp" />
       </list>
     </option>
   </component>
@@ -419,7 +441,10 @@
       <workItem from="1480275817436" duration="44908000" />
       <workItem from="1480435683207" duration="45323000" />
       <workItem from="1480536112947" duration="583000" />
-      <workItem from="1480536989168" duration="26588000" />
+      <workItem from="1480536989168" duration="29189000" />
+      <workItem from="1480799167408" duration="1233000" />
+      <workItem from="1480886964934" duration="92000" />
+      <workItem from="1480887187322" duration="1464000" />
     </task>
     <task id="LOCAL-00001" summary="Made a gitignore">
       <created>1479914155099</created>
@@ -481,7 +506,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="181993000" />
+    <option name="totallyTimeSpent" value="187383000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
@@ -489,8 +514,8 @@
     <layout>
       <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.17604166" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
-      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.23361522" sideWeight="0.49322918" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.23361522" sideWeight="0.50677085" order="7" side_tool="true" content_ui="tabs" />
+      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.23361522" sideWeight="0.48697916" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.23361522" sideWeight="0.5130208" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3296875" sideWeight="0.49704143" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3296875" sideWeight="0.49861932" order="7" side_tool="false" content_ui="tabs" />
@@ -528,6 +553,129 @@
     <watches-manager />
   </component>
   <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/source/BabySkyrme.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1768">
+          <caret line="104" column="0" lean-forward="false" selection-start-line="104" selection-start-column="0" selection-end-line="104" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/Skyrme.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="3349">
+          <caret line="197" column="45" lean-forward="false" selection-start-line="197" selection-start-column="45" selection-end-line="197" selection-end-column="45" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/SakaiSugimoto.h" />
+    <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="935">
+          <caret line="55" column="53" lean-forward="false" selection-start-line="55" selection-start-column="53" selection-end-line="55" selection-end-column="53" />
+          <folding>
+            <element signature="e#937#946#0" expanded="true" />
+            <element signature="e#2425#2434#0" expanded="true" />
+            <element signature="e#4977#4986#0" expanded="true" />
+            <element signature="e#5489#5498#0" expanded="true" />
+            <element signature="e#5574#5583#0" expanded="true" />
+            <element signature="e#5971#5980#0" expanded="true" />
+            <element signature="e#6317#6326#0" expanded="true" />
+            <element signature="e#6411#6420#0" expanded="true" />
+            <element signature="e#6713#6722#0" expanded="true" />
+            <element signature="e#7045#7054#0" expanded="true" />
+            <element signature="e#7165#7174#0" expanded="true" />
+            <element signature="e#7290#7299#0" expanded="true" />
+            <element signature="e#7362#7371#0" expanded="true" />
+            <element signature="e#7435#7444#0" expanded="true" />
+            <element signature="e#7592#7601#0" expanded="true" />
+            <element signature="e#7902#7911#0" expanded="true" />
+            <element signature="e#8216#8225#0" expanded="true" />
+            <element signature="e#8470#8479#0" expanded="true" />
+            <element signature="e#8586#8595#0" expanded="true" />
+            <element signature="e#8798#8807#0" expanded="true" />
+            <element signature="e#9770#9779#0" expanded="true" />
+            <element signature="e#10026#10035#0" expanded="true" />
+            <element signature="e#10753#10762#0" expanded="true" />
+            <element signature="e#12085#12094#0" expanded="true" />
+            <element signature="e#13656#13665#0" expanded="true" />
+            <element signature="e#19943#19952#0" expanded="true" />
+            <element signature="e#26262#26271#0" expanded="true" />
+            <element signature="e#26450#26459#0" expanded="true" />
+            <element signature="e#27094#27103#0" expanded="true" />
+            <element signature="e#27219#27228#0" expanded="true" />
+            <element signature="e#27336#27345#0" expanded="true" />
+            <element signature="e#27505#27514#0" expanded="true" />
+            <element signature="e#35736#35745#0" expanded="true" />
+            <element signature="e#36277#36286#0" expanded="true" />
+            <element signature="e#36601#36610#0" expanded="true" />
+            <element signature="e#37304#37313#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/BabySkyrme.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/Skyrme.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1037">
+          <caret line="61" column="26" lean-forward="false" selection-start-line="61" selection-start-column="26" selection-end-line="61" selection-end-column="26" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="935">
+          <caret line="55" column="53" lean-forward="true" selection-start-line="55" selection-start-column="53" selection-end-line="55" selection-end-column="53" />
+          <folding>
+            <element signature="e#937#946#0" expanded="true" />
+            <element signature="e#2425#2434#0" expanded="true" />
+            <element signature="e#4977#4986#0" expanded="true" />
+            <element signature="e#5489#5498#0" expanded="true" />
+            <element signature="e#5574#5583#0" expanded="true" />
+            <element signature="e#5971#5980#0" expanded="true" />
+            <element signature="e#6317#6326#0" expanded="true" />
+            <element signature="e#6411#6420#0" expanded="true" />
+            <element signature="e#6713#6722#0" expanded="true" />
+            <element signature="e#7045#7054#0" expanded="true" />
+            <element signature="e#7165#7174#0" expanded="true" />
+            <element signature="e#7290#7299#0" expanded="true" />
+            <element signature="e#7362#7371#0" expanded="true" />
+            <element signature="e#7435#7444#0" expanded="true" />
+            <element signature="e#7592#7601#0" expanded="true" />
+            <element signature="e#7902#7911#0" expanded="true" />
+            <element signature="e#8216#8225#0" expanded="true" />
+            <element signature="e#8470#8479#0" expanded="true" />
+            <element signature="e#8586#8595#0" expanded="true" />
+            <element signature="e#8798#8807#0" expanded="true" />
+            <element signature="e#9770#9779#0" expanded="true" />
+            <element signature="e#10026#10035#0" expanded="true" />
+            <element signature="e#10753#10762#0" expanded="true" />
+            <element signature="e#12085#12094#0" expanded="true" />
+            <element signature="e#13656#13665#0" expanded="true" />
+            <element signature="e#19943#19952#0" expanded="true" />
+            <element signature="e#26262#26271#0" expanded="true" />
+            <element signature="e#26450#26459#0" expanded="true" />
+            <element signature="e#27094#27103#0" expanded="true" />
+            <element signature="e#27219#27228#0" expanded="true" />
+            <element signature="e#27336#27345#0" expanded="true" />
+            <element signature="e#27505#27514#0" expanded="true" />
+            <element signature="e#35736#35745#0" expanded="true" />
+            <element signature="e#36277#36286#0" expanded="true" />
+            <element signature="e#36601#36610#0" expanded="true" />
+            <element signature="e#37304#37313#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
@@ -593,7 +741,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="51">
           <caret line="3" column="6" lean-forward="true" selection-start-line="3" selection-start-column="6" selection-end-line="3" selection-end-column="6" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -670,7 +817,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -739,7 +885,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="975">
           <caret line="65" column="82" lean-forward="true" selection-start-line="65" selection-start-column="82" selection-end-line="65" selection-end-column="82" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -747,7 +892,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="15">
           <caret line="1" column="20" lean-forward="false" selection-start-line="1" selection-start-column="20" selection-end-line="1" selection-end-column="20" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -824,7 +968,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="15">
           <caret line="1" column="0" lean-forward="false" selection-start-line="1" selection-start-column="0" selection-end-line="1" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -896,7 +1039,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="1110">
           <caret line="74" column="36" lean-forward="false" selection-start-line="74" selection-start-column="36" selection-end-line="74" selection-end-column="36" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -904,7 +1046,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -929,7 +1070,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="663">
           <caret line="65" column="82" lean-forward="false" selection-start-line="65" selection-start-column="82" selection-end-line="65" selection-end-column="82" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -948,30 +1088,13 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="51">
           <caret line="3" column="6" lean-forward="false" selection-start-line="3" selection-start-column="6" selection-end-line="3" selection-end-column="6" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/source/Skyrme.hpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="430">
-          <caret line="61" column="26" lean-forward="false" selection-start-line="61" selection-start-column="26" selection-end-line="61" selection-end-column="26" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/source/BabySkyrme.hpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="200">
-          <caret line="104" column="0" lean-forward="true" selection-start-line="104" selection-start-column="0" selection-end-line="104" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="578">
-          <caret line="829" column="172" lean-forward="false" selection-start-line="829" selection-start-column="172" selection-end-line="829" selection-end-column="172" />
+        <state relative-caret-position="935">
+          <caret line="55" column="53" lean-forward="false" selection-start-line="55" selection-start-column="53" selection-end-line="55" selection-end-column="53" />
           <folding>
             <element signature="e#937#946#0" expanded="true" />
             <element signature="e#2425#2434#0" expanded="true" />
@@ -1010,6 +1133,39 @@
             <element signature="e#36601#36610#0" expanded="true" />
             <element signature="e#37304#37313#0" expanded="true" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/SakaiSugimoto.h" />
+    <entry file="file://$PROJECT_DIR$/source/Skyrme.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2669">
+          <caret line="157" column="30" lean-forward="false" selection-start-line="157" selection-start-column="30" selection-end-line="157" selection-end-column="30" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/SakaiSugimoto.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="289">
+          <caret line="17" column="23" lean-forward="false" selection-start-line="17" selection-start-column="23" selection-end-line="17" selection-end-column="23" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/BabySkyrme.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1768">
+          <caret line="104" column="0" lean-forward="false" selection-start-line="104" selection-start-column="0" selection-end-line="104" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/source/SkyrmeWithMeson.hpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="221">
+          <caret line="13" column="21" lean-forward="false" selection-start-line="13" selection-start-column="21" selection-end-line="13" selection-end-column="21" />
+          <folding />
         </state>
       </provider>
     </entry>

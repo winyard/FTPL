@@ -80,6 +80,6 @@ endforeach()
 list(REMOVE_DUPLICATES FTPL_INCLUDE_DIRS)
 
 include_directories(${FTPL_INCLUDE_DIRS})
-add_executable(FTPL ${FTPL_SOURCES})
+add_executable(FTPL ${FTPL_SOURCES} source/SakaiSugimoto.h)
 
 #target_compile_options(EMC PUBLIC -std=c++14 -fopenmp -Wall -Wfloat-conversion -O3 -march=native -mno-avx -Wno-deprecated-declarations -DEIGEN_NO_DEBUG -DNDEBUG)

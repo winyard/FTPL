@@ -31,9 +31,13 @@ namespace FTPL {
         double calculateCharge(int pos);
         double getCharge(){return charge;};
         void updateCharge();
+        void addRhoMeson();
+        void addA1Meson();
+        void addOmegaMeson();
     private:
         // parameters
         double Fpi, epi, mpi;
+
         double charge;
         vector<double> chargedensity;
     };
