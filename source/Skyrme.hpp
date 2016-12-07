@@ -6,6 +6,7 @@
 #include <cmath>
 #include "FieldTheories.hpp"
 #include <Eigen/Dense>
+#include "RationalMaps.hpp"
 
 using namespace std;
 
@@ -230,18 +231,13 @@ namespace FTPL {
                     }else {
                         double theta = atan2(y_in - y, x_in - x) - phi;
                         double thi = acos((z - z_in) / r);
-                        double reala = tan(thi / 2.0) * cos(theta);
-                        double ima = tan(thi / 2.0) * sin(theta);
-                        double realb = 1.0;
-                        double imb = 0.0;
-                        double real = (reala * realb + ima * imb) / (realb * realb + imb * imb);
-                        double imaginary = (-reala * imb + ima * realb) / (realb * realb + imb * imb);
-                        double mod = sqrt(real * real + imaginary * imaginary);
+                        vector<double> rational = FTPL::rationalMap(thi,theta,B);
+                        double mod = sqrt(rational[0] * rational[0] + rational[1] * rational[1]);
                         double constant = 1.0 / (1.0 + mod * mod);
 
                         double res0 = cos(initial(r));
-                        double res1 = sin(initial(r)) * constant * 2.0 * real;
-                        double res2 = sin(initial(r)) * constant * 2.0 * imaginary;
+                        double res1 = sin(initial(r)) * constant * 2.0 * rational[0];
+                        double res2 = sin(initial(r)) * constant * 2.0 * rational[1];
                         double res3 = sin(initial(r)) * constant * (1.0 - mod * mod);
                         Eigen::Vector4d value(res0, res1, res2, res3);
                         f->setData(value, {i, j, k});
