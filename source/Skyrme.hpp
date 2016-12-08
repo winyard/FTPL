@@ -58,7 +58,8 @@ namespace FTPL {
 
 //tryadding .noalias to A could be faster
             //Eigen::Matrix3d A = Eigen::Matrix3d::Identity()*(1.0 + mu*mu*(fx.squaredNorm() + fy.squaredNorm()))-mu*mu*(fx*fx.transpose()+fy*fy.transpose());
-            Eigen::Matrix4d A = Eigen::Matrix4d::Identity()*(Fpi*Fpi/4.0 + (1.0/(epi*epi))*( fx.squaredNorm() + fy.squaredNorm() + fz.squaredNorm() ))-(1.0/(epi*epi))*( fx*fx.transpose()+fy*fy.transpose()+fz*fz.transpose() );
+            double store = fx.squaredNorm() + fy.squaredNorm() + fz.squaredNorm();
+            Eigen::Matrix4d A = Eigen::Matrix4d::Identity()*(Fpi*Fpi/4.0 + (1.0/(epi*epi))*( store ))-(1.0/(epi*epi))*( fx*fx.transpose()+fy*fy.transpose()+fz*fz.transpose() );
 
            /* Eigen::Vector4d b = (Fpi*Fpi/4.0)*(fxx + fyy + fzz) + (1.0/(epi*epi))*(ft * (fxx.dot(ft) + fyy.dot(ft) + fzz.dot(ft)) + 2.0 * ftx * ft.dot(fx) +
                                                        2.0 * fty * ft.dot(fy) + 2.0*ftz * ft.dot(fz) - (fxx + fyy + fzz) * ft.squaredNorm() -
@@ -94,10 +95,10 @@ namespace FTPL {
                                                         + fz*(fxz.dot(fx) + fyz.dot(fy)));*/
 
             b[0] += mpi * mpi;
-            double lagrange = -0.5 * b.dot(f0) - (Fpi*Fpi/8.0) * ft.squaredNorm() - ft.squaredNorm()*(1.0/(2.0*epi*epi))*(fx.squaredNorm() + fy.squaredNorm() + fz.squaredNorm());
+            double lagrange = -0.5 * b.dot(f0) - ft.squaredNorm()*((Fpi*Fpi/8.0) + (1.0/(2.0*epi*epi))*(fx.squaredNorm() + fy.squaredNorm() + fz.squaredNorm()));
             b += 2.0 * lagrange * f0;
             //f0 = A.colPivHouseholderQr().solve(b);//try some different solvers!
-            f0 = A.ldlt().solve(b);
+            f0 = A.ldlt().solve(b); // best for skyrme
             //f0 = A.jacobiSvd().solve(b);
             f->k0_result[pos] = dt * ft;
             f->k1_result[pos] = dt * f0;

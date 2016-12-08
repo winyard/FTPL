@@ -39,9 +39,14 @@ namespace FTPL {
         double charge;
         vector<double> chargedensity;
         vector<Field<Eigen::VectorXd>*> V;
-        Field<Eigen::Vector2d> * omega; // may need to seperate into reals and imaginary (though should write a field type to generalise for complex really)
-        Field<Eigen::Vector3d> * rho;
-        Field<Eigen::Vector3d> * a1;
+        Field<double> * omega; // may need to seperate into reals and imaginary (though should write a field type to generalise for complex really)
+        Field<Eigen::Vector3d> * rho0;
+        Field<Eigen::Vector3d> * rho1;
+        Field<Eigen::Vector3d> * rho2;
+        Field<Eigen::Vector3d> * a10;
+        Field<Eigen::Vector3d> * a11;
+        Field<Eigen::Vector3d> * a12;
+
     };
 
     void SkyrmeModel::addVectorMeson(int meson) {
@@ -156,9 +161,22 @@ namespace FTPL {
         Eigen::Vector4d fy = single_derivative(f, 1, pos);
         Eigen::Vector4d fz = single_derivative(f, 2, pos);
 
-        return ((1.0)/(12.0*M_PI*M_PI))*((Fpi*Fpi/8.0)*(fx.squaredNorm()+fy.squaredNorm()+fz.squaredNorm())
+        Eigen::Matrix2d R0,R1,R2;
+
+        //double skyrme_energy = c1*0.5*(R0*R0 + R1*R1 + R2*R2).trace() - (c2/16.0)*(R0,R1*R0,R1 )
+
+
+        double skyrme_energy = ((1.0)/(12.0*M_PI*M_PI))*((Fpi*Fpi/8.0)*(fx.squaredNorm()+fy.squaredNorm()+fz.squaredNorm())
                                          + (1.0/(2.0*epi*epi))*(fx.squaredNorm()*(fy.squaredNorm()+fz.squaredNorm()) + fy.squaredNorm()*fz.squaredNorm()
                                                                 - fx.dot(fy)*fx.dot(fy) - fx.dot(fz)*fx.dot(fz) - fy.dot(fz)*fy.dot(fz) ) + mpi*mpi*(1.0 - f->data[pos][0]));
+
+        double omega_energy = - 0.5*g*omega*charge        ;
+
+        double Ev = v1x + v2x + v0y + v2y + v
+
+        double rho_energy =
+
+                return skyrme_energy + rho_energy;
     };
 
     vector<double> SkyrmeModel::calculateDynamicEnergy(int pos){

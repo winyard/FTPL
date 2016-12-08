@@ -5,18 +5,18 @@ int main() {
 
     Eigen::initParallel();
 
-    FTPL::SkyrmeModel my_model(100, 100, 100, false);
+ /*   FTPL::SkyrmeModel my_model(100, 100, 100, false);
     cout << "created!\n";
     Eigen::Vector4d input(1, 0, 0, 0);
     my_model.f->fill(input);
 
-    double space = 0.05;
+    double space = 0.1;
     my_model.setSpacing({space, space, space});
     my_model.setParameters(sqrt(8.0),sqrt(0.5),0.0);
 
     my_model.setTimeInterval(0.5*space);
     cout << "do initial conditions\n";
-    my_model.initialCondition(1, 0, 0, 0, 0);
+    my_model.initialCondition(2, 0, 0, 0, 0);
     cout << "now clac energy\n";
     my_model.updateEnergy();
     cout << "Energy = " << my_model.getEnergy() << "\n";
@@ -26,11 +26,11 @@ int main() {
 
     cout << "Time to test the anealing method!\n";
     Timer tmr;
-    my_model.annealing(1000000000,1000000,true);
+    my_model.annealing(10000000,1000000,true);
     cout << "10 loops finished in " <<tmr.elapsed() << " sec\n";
-    cout << "ALL DONE!!\n";
+    cout << "ALL DONE!!\n";*/
 
- /*   FTPL::SkyrmeModel my_model(100, 100, 100, true);
+    FTPL::SkyrmeModel my_model(100, 100, 100, true);
 
     Eigen::Vector4d input(1, 0, 0, 0);
     my_model.f->fill(input);
@@ -40,7 +40,7 @@ int main() {
     my_model.setParameters(sqrt(8.0),sqrt(0.5),0.0);
 
     my_model.setTimeInterval(0.2*space);
-    my_model.initialCondition(1, 0, 0, 0, 0);
+    my_model.initialCondition(2, 0, 0, 0, 0);
 
     my_model.updateEnergy();
     cout << "Energy = " << my_model.getEnergy() << "\n";
@@ -51,7 +51,7 @@ int main() {
     my_model.RK4(10,true,true,10);
     cout << "1000 loops finished in " <<tmr.elapsed() << " sec\n";
     my_model.setTimeInterval(0.5*space*space*space);
-    my_model.gradientFlow(100, 10, true);
+    my_model.gradientFlow(1000, 100, true);
     cout << "ALL DONE!!\n";
 
 

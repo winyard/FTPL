@@ -22,6 +22,8 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 ##################################
 include(CheckCXXCompilerFlag)
 set(ENABLE_CXXFLAGS_TO_CHECK
+        -std=c++17
+        -std=c++1z
         -std=c++14
         -std=c++1y
         -std=gnu++1y
