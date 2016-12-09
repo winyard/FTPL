@@ -35,32 +35,38 @@ int main() {
     Eigen::Vector4d input(1, 0, 0, 0);
     my_model.f->fill(input);
 
-    double space = 0.1;
+    double space = 0.2;
     my_model.setSpacing({space, space, space});
     my_model.setParameters(sqrt(8.0),sqrt(0.5),0.0);
 
     my_model.setTimeInterval(0.2*space);
-    my_model.initialCondition(2, 0, 0, 0, 0);
+    my_model.initialCondition(3, 0, 0, 0, 0);
 
     my_model.updateEnergy();
     cout << "Energy = " << my_model.getEnergy() << "\n";
     my_model.updateCharge();
     cout << "Charge = " << my_model.getCharge() << "\n";
 
+    cout << "plotting energy\n";
+    my_model.plotEnergy();
+    cout << "GOGOGO!\n";
     Timer tmr;
-    my_model.RK4(10,true,true,10);
+    my_model.RK4(20,true,true,10);
     cout << "1000 loops finished in " <<tmr.elapsed() << " sec\n";
+    my_model.updateEnergy();
+    my_model.plotEnergy();
     my_model.setTimeInterval(0.5*space*space*space);
-    my_model.gradientFlow(1000, 100, true);
+    my_model.gradientFlow(100, 100, true);
     cout << "ALL DONE!!\n";
+    my_model.updateEnergy();
+    my_model.plotEnergy();
 
-
-   /* FTPL::BabySkyrmeModel my_model(200, 200, true);
+   /* FTPL::BabySkyrmeModel my_model(500, 500, true);
 
     Eigen::Vector3d input(0, 0, 1);
     my_model.f->fill(input);
 
-    double space = 0.2;
+    double space = 0.1;
     my_model.setSpacing({space, space});
     my_model.setParameters(1.0,sqrt(0.1));
 
@@ -72,12 +78,15 @@ int main() {
     my_model.updateCharge();
     cout << "Charge = " << my_model.getCharge() << "\n";
 
+    my_model.plotEnergy();
+
     Timer tmr;
-    my_model.RK4(1000,true,true,1);
+    my_model.RK4(100,true,true,1);
     cout << "1000 loops finished in " <<tmr.elapsed() << " sec\n";
+    my_model.plotEnergy();
     my_model.setTimeInterval(0.5*space*space*space);
-    my_model.gradientFlow(100, 10, true);
-    cout << "ALL DONE!!\n";
+    my_model.gradientFlow(1000, 10, true);
+    cout << "ALL DONE!!\n";*/
 
 
 /*    FTPL::BabySkyrmeModel my_model(100, 100, false);

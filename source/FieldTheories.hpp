@@ -19,6 +19,7 @@
 #include <stdarg.h>
 #include <chrono>
 #include <random>
+#include "../source_plot/plots.hpp"
 
 class Timer
 {
@@ -416,6 +417,7 @@ class TargetSpace {
         vector<double> getSpacing();
         int getTotalSize();
         double getTotalSpacing();
+        void plotEnergy();
         void setMetricType(string type);
         void annealing(int iterations, int often, bool normalise = false);
         template <class T>
@@ -1388,6 +1390,22 @@ void BaseFieldTheory::load(const char * loadpath){
     //close the file
     infile.close();
     cout << "loading completed!\n";
+}
+
+void BaseFieldTheory::plotEnergy() {
+    if(dim == 2){
+        plot2D(size, energydensity);
+    }
+    if(dim == 3){
+        double isovalue = -1.0;
+        for(int i = 0; i < getTotalSize(); i++) {
+            if(energydensity[i] > isovalue){
+                isovalue = energydensity[i];
+            }
+        }
+        plot3D(size, energydensity , isovalue/2.0);
+    }
+
 }
 
 }
