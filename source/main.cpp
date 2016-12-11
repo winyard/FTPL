@@ -36,7 +36,7 @@ int main() {
 
         cout << "Time to test the anealing method!\n";
         Timer tmr;
-        my_model.annealing(10000, 1000000, 5, true);
+        my_model.annealing(10000, 1000000, 3, true);
         cout << "10 loops finished in " << tmr.elapsed() << " sec\n";
         cout << "ALL DONE!!\n";
     }

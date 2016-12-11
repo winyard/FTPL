@@ -994,7 +994,7 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool n
                 {
                     no_total++;
                     updateEnergy();
-                    cout << no_total << ": the energy so far is " << energy << "\n";
+                    cout << no_total << ": the energy so far is " << energy <<  " : with dt = " << dt << "\n";
                     no=0;
                     if(energy == check_energy){
                         cut_no++;

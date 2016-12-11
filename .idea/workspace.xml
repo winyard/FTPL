@@ -37,8 +37,8 @@
       <file leaf-file-name="FieldTheories.hpp" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-8811">
-              <caret line="452" column="84" lean-forward="false" selection-start-line="452" selection-start-column="84" selection-end-line="452" selection-end-column="84" />
+            <state relative-caret-position="249">
+              <caret line="996" column="105" lean-forward="false" selection-start-line="996" selection-start-column="105" selection-end-line="996" selection-end-column="105" />
               <folding>
                 <element signature="e#129#145#0" expanded="true" />
                 <element signature="e#1052#1061#0" expanded="true" />
@@ -70,10 +70,10 @@
                 <element signature="e#14604#14613#0" expanded="true" />
                 <element signature="e#14789#14798#0" expanded="true" />
                 <element signature="e#24484#24493#0" expanded="true" />
-                <element signature="e#42638#42647#0" expanded="true" />
-                <element signature="e#43179#43188#0" expanded="true" />
-                <element signature="e#43503#43512#0" expanded="true" />
-                <element signature="e#44206#44215#0" expanded="true" />
+                <element signature="e#42664#42673#0" expanded="true" />
+                <element signature="e#43205#43214#0" expanded="true" />
+                <element signature="e#43529#43538#0" expanded="true" />
+                <element signature="e#44232#44241#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -105,7 +105,7 @@
         <entry file="file://$PROJECT_DIR$/source/main.cpp">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="435">
-              <caret line="38" column="52" lean-forward="true" selection-start-line="38" selection-start-column="52" selection-end-line="38" selection-end-column="52" />
+              <caret line="38" column="44" lean-forward="false" selection-start-line="38" selection-start-column="44" selection-end-line="38" selection-end-column="44" />
               <folding>
                 <element signature="e#0#21#0" expanded="true" />
               </folding>
@@ -117,7 +117,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>randomis</find>
       <find>calculateEn</find>
       <find>RK4</find>
       <find>alter_point</find>
@@ -145,8 +144,9 @@
       <find>calculateen</find>
       <find>annealing</find>
       <find>anneal</find>
-      <find>randomise</find>
       <find>initialcon</find>
+      <find>randomise</find>
+      <find>annealin</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -178,8 +178,8 @@
         <option value="$PROJECT_DIR$/source/Skyrme.hpp" />
         <option value="$PROJECT_DIR$/source/BabySkyrme.hpp" />
         <option value="$PROJECT_DIR$/source/SkyrmeWithMeson.hpp" />
-        <option value="$PROJECT_DIR$/source/FieldTheories.hpp" />
         <option value="$PROJECT_DIR$/source/main.cpp" />
+        <option value="$PROJECT_DIR$/source/FieldTheories.hpp" />
       </list>
     </option>
   </component>
@@ -464,7 +464,7 @@
       <workItem from="1481191240850" duration="1043000" />
       <workItem from="1481200661566" duration="25036000" />
       <workItem from="1481303574284" duration="428000" />
-      <workItem from="1481308093970" duration="39384000" />
+      <workItem from="1481308093970" duration="39482000" />
     </task>
     <task id="LOCAL-00001" summary="Made a gitignore">
       <created>1479914155099</created>
@@ -543,11 +543,18 @@
       <option name="project" value="LOCAL" />
       <updated>1481478359005</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="Working Code - YAY!">
+      <created>1481482626063</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1481482626063</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="303921000" />
+    <option name="totallyTimeSpent" value="304019000" />
   </component>
   <component name="TodoView">
     <todo-panel id="selected-file">
@@ -564,12 +571,12 @@
     <layout>
       <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.25167653" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3296875" sideWeight="0.49861932" order="6" side_tool="false" content_ui="tabs" />
-      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.503125" sideWeight="0.4923077" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.503125" sideWeight="0.48915187" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.328125" sideWeight="0.44457594" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.225" sideWeight="0.8856016" order="7" side_tool="true" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.225" sideWeight="0.8863905" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3296875" sideWeight="0.49861932" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3296875" sideWeight="0.49546352" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.225" sideWeight="0.11439842" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.225" sideWeight="0.11360947" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3296875" sideWeight="0.49861932" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="true" content_ui="tabs" />
@@ -655,10 +662,10 @@
             <element signature="e#14604#14613#0" expanded="true" />
             <element signature="e#14789#14798#0" expanded="true" />
             <element signature="e#24484#24493#0" expanded="true" />
-            <element signature="e#42638#42647#0" expanded="true" />
-            <element signature="e#43179#43188#0" expanded="true" />
-            <element signature="e#43503#43512#0" expanded="true" />
-            <element signature="e#44206#44215#0" expanded="true" />
+            <element signature="e#42664#42673#0" expanded="true" />
+            <element signature="e#43205#43214#0" expanded="true" />
+            <element signature="e#43529#43538#0" expanded="true" />
+            <element signature="e#44232#44241#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -733,10 +740,10 @@
             <element signature="e#14604#14613#0" expanded="true" />
             <element signature="e#14789#14798#0" expanded="true" />
             <element signature="e#24484#24493#0" expanded="true" />
-            <element signature="e#42638#42647#0" expanded="true" />
-            <element signature="e#43179#43188#0" expanded="true" />
-            <element signature="e#43503#43512#0" expanded="true" />
-            <element signature="e#44206#44215#0" expanded="true" />
+            <element signature="e#42664#42673#0" expanded="true" />
+            <element signature="e#43205#43214#0" expanded="true" />
+            <element signature="e#43529#43538#0" expanded="true" />
+            <element signature="e#44232#44241#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -811,10 +818,10 @@
             <element signature="e#14604#14613#0" expanded="true" />
             <element signature="e#14789#14798#0" expanded="true" />
             <element signature="e#24484#24493#0" expanded="true" />
-            <element signature="e#42638#42647#0" expanded="true" />
-            <element signature="e#43179#43188#0" expanded="true" />
-            <element signature="e#43503#43512#0" expanded="true" />
-            <element signature="e#44206#44215#0" expanded="true" />
+            <element signature="e#42664#42673#0" expanded="true" />
+            <element signature="e#43205#43214#0" expanded="true" />
+            <element signature="e#43529#43538#0" expanded="true" />
+            <element signature="e#44232#44241#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -886,10 +893,10 @@
             <element signature="e#14604#14613#0" expanded="true" />
             <element signature="e#14789#14798#0" expanded="true" />
             <element signature="e#24484#24493#0" expanded="true" />
-            <element signature="e#42638#42647#0" expanded="true" />
-            <element signature="e#43179#43188#0" expanded="true" />
-            <element signature="e#43503#43512#0" expanded="true" />
-            <element signature="e#44206#44215#0" expanded="true" />
+            <element signature="e#42664#42673#0" expanded="true" />
+            <element signature="e#43205#43214#0" expanded="true" />
+            <element signature="e#43529#43538#0" expanded="true" />
+            <element signature="e#44232#44241#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -954,10 +961,10 @@
             <element signature="e#14604#14613#0" expanded="true" />
             <element signature="e#14789#14798#0" expanded="true" />
             <element signature="e#24484#24493#0" expanded="true" />
-            <element signature="e#42638#42647#0" expanded="true" />
-            <element signature="e#43179#43188#0" expanded="true" />
-            <element signature="e#43503#43512#0" expanded="true" />
-            <element signature="e#44206#44215#0" expanded="true" />
+            <element signature="e#42664#42673#0" expanded="true" />
+            <element signature="e#43205#43214#0" expanded="true" />
+            <element signature="e#43529#43538#0" expanded="true" />
+            <element signature="e#44232#44241#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -1110,16 +1117,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/source/main.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="435">
-          <caret line="38" column="52" lean-forward="true" selection-start-line="38" selection-start-column="52" selection-end-line="38" selection-end-column="52" />
-          <folding>
-            <element signature="e#0#21#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/source/SkyrmeWithMeson.hpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="495">
@@ -1128,10 +1125,20 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/source/main.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="435">
+          <caret line="38" column="44" lean-forward="false" selection-start-line="38" selection-start-column="44" selection-end-line="38" selection-end-column="44" />
+          <folding>
+            <element signature="e#0#21#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/source/FieldTheories.hpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-8811">
-          <caret line="452" column="84" lean-forward="false" selection-start-line="452" selection-start-column="84" selection-end-line="452" selection-end-column="84" />
+        <state relative-caret-position="249">
+          <caret line="996" column="105" lean-forward="false" selection-start-line="996" selection-start-column="105" selection-end-line="996" selection-end-column="105" />
           <folding>
             <element signature="e#129#145#0" expanded="true" />
             <element signature="e#1052#1061#0" expanded="true" />
@@ -1163,10 +1170,10 @@
             <element signature="e#14604#14613#0" expanded="true" />
             <element signature="e#14789#14798#0" expanded="true" />
             <element signature="e#24484#24493#0" expanded="true" />
-            <element signature="e#42638#42647#0" expanded="true" />
-            <element signature="e#43179#43188#0" expanded="true" />
-            <element signature="e#43503#43512#0" expanded="true" />
-            <element signature="e#44206#44215#0" expanded="true" />
+            <element signature="e#42664#42673#0" expanded="true" />
+            <element signature="e#43205#43214#0" expanded="true" />
+            <element signature="e#43529#43538#0" expanded="true" />
+            <element signature="e#44232#44241#0" expanded="true" />
           </folding>
         </state>
       </provider>
