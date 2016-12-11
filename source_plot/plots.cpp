@@ -4,7 +4,6 @@
 #include <vtkSmartPointer.h>
 #include <vtkMarchingCubes.h>
 #include <vtkVoxelModeller.h>
-#include <vtkSphereSource.h>
 #include <vtkImageData.h>
 
 #include <vtkActor.h>
@@ -12,23 +11,10 @@
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderWindow.h>
 #include <vtkRenderer.h>
-
-#include <vtkVersion.h>
-#include <vtkSmartPointer.h>
-
-#include <vtkActor.h>
 #include <vtkDelaunay2D.h>
 #include <vtkLookupTable.h>
-#include <vtkMath.h>
 #include <vtkPointData.h>
-#include <vtkPoints.h>
-#include <vtkPolyData.h>
-#include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
-#include <vtkRenderWindow.h>
-#include <vtkRenderWindowInteractor.h>
-#include <vtkRenderer.h>
-#include <vtkVertexGlyphFilter.h>
 #include <vtkXMLPolyDataWriter.h>
 
 // For compatibility with new VTK generic data arrays

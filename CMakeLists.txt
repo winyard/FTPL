@@ -14,8 +14,9 @@ find_package(MPI REQUIRED)
 include_directories(${MPI_INCLUDE_PATH})
 find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
-
-
+FIND_PACKAGE(CUDA REQUIRED)
+INCLUDE(FindCUDA)
+INCLUDE_DIRECTORIES(/usr/local/cuda/include)
 
 ##################################
 # Check for c++14 compiler support
@@ -44,6 +45,7 @@ foreach(flag ${ENABLE_CXXFLAGS_TO_CHECK})
 endforeach()
 
 set(CMAKE_AUTOMOC ON)
+
 
 set(VTK_DIR "/home/tom/Documents/Coding/VTK-build")
 find_package(VTK REQUIRED)
@@ -80,6 +82,8 @@ file(GLOB_RECURSE FTPL_PLOT_SOURCES "source_plot/*.cpp")
 file(GLOB_RECURSE FTPL_HEADERS "source/*.hpp")
 file(GLOB_RECURSE FTPL_PLOT_HEADERS "source_plot/*.h")
 
+CUDA_ADD_EXECUTABLE(lbmslv ${FTPL_SOURCES})
+
 set (FTPL_INCLUDE_DIRS "")
 foreach (_headerFile ${FTPL_HEADERS} $(FTPL_PLOT_HEADERS))
     get_filename_component(_dir ${_headerFile} PATH)
@@ -88,9 +92,12 @@ endforeach()
 
 list(REMOVE_DUPLICATES FTPL_INCLUDE_DIRS)
 
+LIST(APPEND CUDA_NVCC_FLAGS --compiler-options -fno-strict-aliasing -lineinfo -use_fast_math -Xptxas -dlcm=cg)
+
 include_directories(${FTPL_INCLUDE_DIRS})
 add_executable(FTPL ${FTPL_SOURCES} ${FTPL_PLOT_SOURCES} source_plot/plots.hpp)
 
 target_link_libraries(FTPL ${VTK_LIBRARIES})
+target_link_libraries(lbmslv /usr/local/cuda/lib64/libcudart.so ${MPI_LIBRARIES})
 
 #target_compile_options(EMC PUBLIC -std=c++14 -fopenmp -Wall -Wfloat-conversion -O3 -march=native -mno-avx -Wno-deprecated-declarations -DEIGEN_NO_DEBUG -DNDEBUG)

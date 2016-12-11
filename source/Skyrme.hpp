@@ -3,6 +3,9 @@
  * Copyright Thomas Winyard 2016
  */
 
+#ifndef SKYRME_H
+#define SKYRME_H
+
 #include <cmath>
 #include "FieldTheories.hpp"
 #include <Eigen/Dense>
@@ -19,10 +22,10 @@ namespace FTPL {
         //maths (higher up functions run slightly faster these are the important ones!)
         inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
         inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
-        inline virtual double __attribute__((always_inline)) calculateEnergy(int pos) final;
+        inline virtual double __attribute__((always_inline)) calculateEnergy(int pos); // RETURN TO FINAL OR CHECK TO SEE IF THIS AFFECTS SPEED!!! FOR INLINE IT REALLY SHOUDLNT BUT CHECK!!!!!!
         inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
         //Other Useful functions
-        void initialCondition(int B, double x_in, double y_in, double z_in, double phi);
+        virtual void initialCondition(int B, double x_in, double y_in, double z_in, double phi);
         double initial(double r);
         //required functions
         SkyrmeModel(const char * filepath, bool isDynamic = false);
@@ -120,8 +123,8 @@ namespace FTPL {
         //vector<int> sizein = {width, height};
         //BaseFieldTheory(2,sizein);
         f = createField(f, isDynamic);
-        Eigen::Vector4d minimum(-0.01,-0.01,-0.01,-0.01);
-        Eigen::Vector4d maximum(0.01,0.01,0.01,0.01);
+        Eigen::Vector4d minimum(-0.05,-0.05,-0.05,-0.05);
+        Eigen::Vector4d maximum(0.05,0.05,0.05,0.05);
         f->min = minimum;
         f->max = maximum;
         chargedensity.resize(getTotalSize());
@@ -262,3 +265,5 @@ namespace FTPL {
     }
 
 }
+
+#endif

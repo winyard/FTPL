@@ -3,6 +3,9 @@
  * Copyright Thomas Winyard 2016
  */
 
+#ifndef BABY_SKYRME_H
+#define BABY_SKYRME_H
+
 #include <cmath>
 #include "FieldTheories.hpp"
 #include <Eigen/Dense>
@@ -209,3 +212,5 @@ void BabySkyrmeModel::initialCondition(int B, double x_in, double y_in, double p
 	}
 
 }
+
+#endif

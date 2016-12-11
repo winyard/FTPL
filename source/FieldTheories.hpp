@@ -3,6 +3,10 @@
  * Copyright Thomas Winyard 2016
  */
 
+
+#ifndef FIELD_THEORIES_H
+#define FIELD_THEORIES_H
+
 #include <cmath>
 
 #include "Exceptions.hpp"
@@ -244,6 +248,7 @@ inline int Field<T>::getTotalSize(){
     for(int i=1; i<dim; i++){
 	total *= size[i];
     }
+    //cout << "ive been asked for my size " << total << "\n";
     return total;
 }
 
@@ -379,10 +384,10 @@ class TargetSpace {
         void derandomise(int i, int field, vector<double> spacing);
     private:
         // Add aditional Field types as they are created here!
-        std::vector<Field<Eigen::VectorXd>> fields1;
-        std::vector<Field<double>> fields2;
-        std::vector<Field<int>> fields3;
-        std::vector<Field<Eigen::MatrixXd>> fields4;
+        std::vector<Field<Eigen::VectorXd>*> fields1;
+        std::vector<Field<double>*> fields2;
+        std::vector<Field<int>*> fields3;
+        std::vector<Field<Eigen::MatrixXd>*> fields4;
 };
 
     class BaseFieldTheory {
@@ -449,55 +454,55 @@ class TargetSpace {
         std::random_device rd;
         std::mt19937 mt(rd());
         if(field <= fields1.size()-1){
-            Eigen::VectorXd value = fields1[field].data[i];
+            Eigen::VectorXd value = fields1[field]->data[i];
             for(int j = 0; j < value.size(); j++){
-                std::uniform_real_distribution<double> dist(fields1[field].min[j], fields1[field].max[j]);
-                value[j] = fields1[field].data[i][j] + dist(mt);
+                std::uniform_real_distribution<double> dist(fields1[field]->min[j], fields1[field]->max[j]);
+                value[j] = fields1[field]->data[i][j] + dist(mt);
             }
             if(normalise){
                 value.normalize();
             }
-            fields1[field].alter_point(i,value,spacing);
+            fields1[field]->alter_point(i,value,spacing);
         }
         else if(field <= fields1.size() + fields2.size() - 1){
-            std::uniform_real_distribution<double> dist(fields2[field - fields1.size()].min, fields2[field - fields1.size()].max);
+            std::uniform_real_distribution<double> dist(fields2[field - fields1.size()]->min, fields2[field - fields1.size()]->max);
             double value = dist(mt);
-            fields2[field - fields1.size()].alter_point(i,value,spacing);
+            fields2[field - fields1.size()]->alter_point(i,value,spacing);
         }
         else if(field<= fields1.size() + fields2.size() +fields3.size() -1){
-            std::uniform_int_distribution<int> dist(fields3[field - fields1.size() - fields2.size()].min, fields3[field - fields1.size() - fields2.size()].max);
+            std::uniform_int_distribution<int> dist(fields3[field - fields1.size() - fields2.size()]->min, fields3[field - fields1.size() - fields2.size()]->max);
             int value = dist(mt);
-            fields3[field - fields1.size() - fields2.size()].alter_point(i,value,spacing);
+            fields3[field - fields1.size() - fields2.size()]->alter_point(i,value,spacing);
         }
         else{
-            Eigen::MatrixXd value = fields4[field - fields1.size() - fields2.size()  - fields3.size()].data[i];
+            Eigen::MatrixXd value = fields4[field - fields1.size() - fields2.size()  - fields3.size()]->data[i];
             for(int j = 0; j < value.rows(); j++){
                 for(int k = 0; k < value.cols(); k++){
-                    std::uniform_real_distribution<double> dist(fields4[field - fields1.size() - fields2.size()  - fields3.size()].min(j,k), fields4[field - fields1.size() - fields2.size()  - fields3.size()].max(j,k));
+                    std::uniform_real_distribution<double> dist(fields4[field - fields1.size() - fields2.size()  - fields3.size()]->min(j,k), fields4[field - fields1.size() - fields2.size()  - fields3.size()]->max(j,k));
                     value(j,k) = dist(mt);
             }}
             if(normalise){
                 value.normalize();
             }
-            fields4[field - fields1.size() - fields2.size()  - fields3.size()].alter_point(i,value,spacing);
+            fields4[field - fields1.size() - fields2.size()  - fields3.size()]->alter_point(i,value,spacing);
         }
     }
 
     void TargetSpace::derandomise(int i, int field, vector<double> spacing){
         if(field <= fields1.size()-1){
-                fields1[field].alter_point(i,fields1[field].buffer[i],spacing);
+                fields1[field]->alter_point(i,fields1[field]->buffer[i],spacing);
         }
         else if(field <= fields1.size() + fields2.size() - 1){
                 int point = field - fields1.size();
-                fields2[point].alter_point(i,fields2[point].buffer[i],spacing);
+                fields2[point]->alter_point(i,fields2[point]->buffer[i],spacing);
         }
         else if(field <= fields1.size() + fields2.size() +fields3.size() -1){
             int point = field - fields1.size() - fields2.size();
-                fields3[point].alter_point(i,fields3[point].buffer[i],spacing);
+                fields3[point]->alter_point(i,fields3[point]->buffer[i],spacing);
         }
         else{
                 int point = field - fields1.size() - fields2.size() - fields3.size();
-                fields4[point].alter_point(i,fields4[point].buffer[i],spacing);
+                fields4[point]->alter_point(i,fields4[point]->buffer[i],spacing);
         }
     }
 
@@ -505,21 +510,21 @@ class TargetSpace {
 
     void TargetSpace::storeDerivatives(BaseFieldTheory * theory){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].single_derivatives.resize(theory->dim);
-            fields1[i].double_derivatives.resize(theory->dim);
+            fields1[i]->single_derivatives.resize(theory->dim);
+            fields1[i]->double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields1[i].single_derivatives[j].resize(theory->getTotalSize());
-                fields1[i].double_derivatives[j].resize(theory->dim);
+                fields1[i]->single_derivatives[j].resize(theory->getTotalSize());
+                fields1[i]->double_derivatives[j].resize(theory->dim);
                 for(int k = j; k < theory->dim; k++ ) {
-                    fields1[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                    fields1[i]->double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
             if (theory->inBoundary(j)) {
                 for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
-                    fields1[i].single_derivatives[wrt1][j] = theory->single_derivative(&fields1[i], wrt1, j);
+                    fields1[i]->single_derivatives[wrt1][j] = theory->single_derivative(fields1[i], wrt1, j);
                     for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
-                        fields1[i].double_derivatives[wrt1][wrt2][j] = theory->double_derivative(&fields1[i], wrt1,
+                        fields1[i]->double_derivatives[wrt1][wrt2][j] = theory->double_derivative(fields1[i], wrt1,
                                                                                                  wrt2, j);
                     }
                 }
@@ -527,61 +532,61 @@ class TargetSpace {
             }
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].single_derivatives.resize(theory->dim);
-            fields2[i].double_derivatives.resize(theory->dim);
+            fields2[i]->single_derivatives.resize(theory->dim);
+            fields2[i]->double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields2[i].single_derivatives[j].resize(theory->getTotalSize());
-                fields2[i].double_derivatives[j].resize(theory->dim);
+                fields2[i]->single_derivatives[j].resize(theory->getTotalSize());
+                fields2[i]->double_derivatives[j].resize(theory->dim);
                 for(int k = j; k < theory->dim; k++ ) {
-                    fields2[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                    fields2[i]->double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
             if (theory->inBoundary(j)) {
                 for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
-                    fields2[i].single_derivatives[wrt1][j]=theory->single_derivative(&fields2[i],wrt1,j);
+                    fields2[i]->single_derivatives[wrt1][j]=theory->single_derivative(fields2[i],wrt1,j);
                     for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
-                        fields2[i].double_derivatives[wrt1][wrt2][j]=theory->double_derivative(&fields2[i],wrt1,wrt2,j);
+                        fields2[i]->double_derivatives[wrt1][wrt2][j]=theory->double_derivative(fields2[i],wrt1,wrt2,j);
                     }
                 }
             }}
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].single_derivatives.resize(theory->dim);
-            fields3[i].double_derivatives.resize(theory->dim);
+            fields3[i]->single_derivatives.resize(theory->dim);
+            fields3[i]->double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields3[i].single_derivatives[j].resize(theory->getTotalSize());
-                fields3[i].double_derivatives[j].resize(theory->dim);
+                fields3[i]->single_derivatives[j].resize(theory->getTotalSize());
+                fields3[i]->double_derivatives[j].resize(theory->dim);
                 for(int k = j; k < theory->dim; k++ ) {
-                    fields3[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                    fields3[i]->double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
             if (theory->inBoundary(j)) {
                 for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
-                    fields3[i].single_derivatives[wrt1][j]=theory->single_derivative(&fields3[i],wrt1,j);
+                    fields3[i]->single_derivatives[wrt1][j]=theory->single_derivative(fields3[i],wrt1,j);
                     for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
-                        fields3[i].double_derivatives[wrt1][wrt2][j]=theory->double_derivative(&fields3[i],wrt1,wrt2,j);
+                        fields3[i]->double_derivatives[wrt1][wrt2][j]=theory->double_derivative(fields3[i],wrt1,wrt2,j);
                     }
                 }
             }}
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].single_derivatives.resize(theory->dim);
-            fields4[i].double_derivatives.resize(theory->dim);
+            fields4[i]->single_derivatives.resize(theory->dim);
+            fields4[i]->double_derivatives.resize(theory->dim);
             for(int j = 0; j < theory->dim ; j++) {
-                fields4[i].single_derivatives[j].resize(theory->getTotalSize());
-                fields4[i].double_derivatives[j].resize(theory->dim);
+                fields4[i]->single_derivatives[j].resize(theory->getTotalSize());
+                fields4[i]->double_derivatives[j].resize(theory->dim);
                 for(int k = j; k < theory->dim; k++ ) {
-                    fields4[i].double_derivatives[j][k].resize(theory->getTotalSize());
+                    fields4[i]->double_derivatives[j][k].resize(theory->getTotalSize());
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
             if (theory->inBoundary(j)) {
                 for(int wrt1 = 0; wrt1 < theory->dim ; wrt1++) {
-                    fields4[i].single_derivatives[wrt1][j]=theory->single_derivative(&fields4[i],wrt1,j);
+                    fields4[i]->single_derivatives[wrt1][j]=theory->single_derivative(fields4[i],wrt1,j);
                     for(int wrt2 = wrt1; wrt2 < theory->dim ; wrt2++) {
-                        fields4[i].double_derivatives[wrt1][wrt2][j]=theory->double_derivative(&fields4[i],wrt1,wrt2,j);
+                        fields4[i]->double_derivatives[wrt1][wrt2][j]=theory->double_derivative(fields4[i],wrt1,wrt2,j);
                     }
                 }
             }}
@@ -590,46 +595,46 @@ class TargetSpace {
 
     void TargetSpace::moveToBuffer(){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].buffer = fields1[i].data;
-            if(fields1[i].dynamic){fields1[i].buffer_dt = fields1[i].dt;}
+            fields1[i]->buffer = fields1[i]->data;
+            if(fields1[i]->dynamic){fields1[i]->buffer_dt = fields1[i]->dt;}
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].buffer = fields2[i].data;
-            if(fields2[i].dynamic){fields2[i].buffer_dt = fields2[i].dt;}
+            fields2[i]->buffer = fields2[i]->data;
+            if(fields2[i]->dynamic){fields2[i]->buffer_dt = fields2[i]->dt;}
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].buffer = fields3[i].data;
-            if(fields3[i].dynamic){fields3[i].buffer_dt = fields3[i].dt;}
+            fields3[i]->buffer = fields3[i]->data;
+            if(fields3[i]->dynamic){fields3[i]->buffer_dt = fields3[i]->dt;}
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].buffer = fields4[i].data;
-            if(fields4[i].dynamic){fields4[i].buffer_dt = fields4[i].dt;}
+            fields4[i]->buffer = fields4[i]->data;
+            if(fields4[i]->dynamic){fields4[i]->buffer_dt = fields4[i]->dt;}
         }
 
     }
 
 void TargetSpace::cutKinetic(int pos){
     for(int i = 0; i < fields1.size(); i++){
-        fields1[i].dt[pos] = Eigen::VectorXd::Zero(fields1[i].dt[pos].size());
+        fields1[i]->dt[pos] = Eigen::VectorXd::Zero(fields1[i]->dt[pos].size());
     }
     for(int i = 0; i < fields2.size(); i++){
-        fields2[i].dt[pos] = 0.0;
+        fields2[i]->dt[pos] = 0.0;
     }
     for(int i = 0; i < fields3.size(); i++){
-        fields3[i].dt[pos] = 0;
+        fields3[i]->dt[pos] = 0;
     }
     for(int i = 0; i < fields4.size(); i++){
 
-        fields4[i].dt[pos] = Eigen::MatrixXd::Zero(fields4[i].dt[pos].rows(), fields4[i].dt[pos].cols());;
+        fields4[i]->dt[pos] = Eigen::MatrixXd::Zero(fields4[i]->dt[pos].rows(), fields4[i]->dt[pos].cols());;
     }
 }
 
 void TargetSpace::normalise(){
     for(int i = 0; i < fields1.size(); i++){
-        fields1[i].normalise();
+        fields1[i]->normalise();
     }
     for(int i = 0; i < fields4.size(); i++){
-        fields1[i].normalise();
+        fields1[i]->normalise();
     }
 }
 
@@ -655,41 +660,41 @@ TargetSpace::TargetSpace(){
 
 void TargetSpace::resize(vector<int> sizein){
     for(int i = 0; i < fields1.size(); i++){
-        fields1[i].resize(sizein);
+        fields1[i]->resize(sizein);
     }
     for(int i = 0; i < fields2.size(); i++){
-        fields2[i].resize(sizein);
+        fields2[i]->resize(sizein);
     }
     for(int i = 0; i < fields3.size(); i++){
-        fields3[i].resize(sizein);
+        fields3[i]->resize(sizein);
     }
     for(int i = 0; i < fields4.size(); i++){
-        fields4[i].resize(sizein);
+        fields4[i]->resize(sizein);
     }
 }
 
 Field<Eigen::VectorXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic) {
-    fields1.push_back(Field < Eigen::VectorXd > (dim, size, isDynamic));
+    fields1.push_back(new Field < Eigen::VectorXd > (dim, size, isDynamic));
     no_fields = no_fields + 1;
-    return &fields1[fields1.size() - 1];
+    return fields1[fields1.size() - 1];
 }
 
 Field<double> * TargetSpace::addField(int dim, vector<int> size, Field<double> * target, bool isDynamic) {
-    fields2.push_back(Field < double > (dim, size, isDynamic));
+    fields2.push_back(new Field < double > (dim, size, isDynamic));
     no_fields = no_fields + 1;
-    return &fields2[fields2.size() - 1];
+    return fields2[fields2.size() - 1];
 }
 
 Field<int> * TargetSpace::addField(int dim, vector<int> size, Field<int> * target, bool isDynamic) {
-    fields3.push_back(Field < int > (dim, size, isDynamic));
+    fields3.push_back(new Field < int > (dim, size, isDynamic));
     no_fields = no_fields + 1;
-    return &fields3[fields3.size() - 1];
+    return fields3[fields3.size() - 1];
 }
 
 Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic) {
-    fields4.push_back(Field < Eigen::MatrixXd > (dim, size, isDynamic));
+    fields4.push_back(new Field < Eigen::MatrixXd > (dim, size, isDynamic));
     no_fields = no_fields + 1;
-    return &fields4[fields4.size() - 1];
+    return fields4[fields4.size() - 1];
 }
 
 
@@ -697,27 +702,27 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
     void TargetSpace::save_fields(ofstream& savefile, int totalSize){
         for(int i = 0; i < fields1.size(); i++){
             for(int j =0; j < totalSize; j++) {
-                for(int k = 0; k < fields1[i].data[j].size(); k++) {
-                    savefile << fields1[i].data[j](k) << " ";
+                for(int k = 0; k < fields1[i]->data[j].size(); k++) {
+                    savefile << fields1[i]->data[j](k) << " ";
                 }
                 savefile << "\n";
             }
         }
         for(int i = 0; i < fields2.size(); i++){
             for(int j =0; j < totalSize; j++) {
-                savefile << fields2[i].data[j] << "\n";
+                savefile << fields2[i]->data[j] << "\n";
             }
         }
         for(int i = 0; i < fields3.size(); i++){
             for(int j =0; j < totalSize; j++) {
-                savefile << fields3[i].data[j] << "\n";
+                savefile << fields3[i]->data[j] << "\n";
             }
         }
         for(int i = 0; i < fields4.size(); i++){
             for(int j =0; j < totalSize; j++) {
-                for(int k = 0; k < fields4[i].data[j].rows(); k++) {
-                for(int h = 0; h < fields4[i].data[j].cols(); h++){
-                    savefile << fields4[i].data[j](k,h) << " ";
+                for(int k = 0; k < fields4[i]->data[j].rows(); k++) {
+                for(int h = 0; h < fields4[i]->data[j].cols(); h++){
+                    savefile << fields4[i]->data[j](k,h) << " ";
                 }}
                 savefile << "\n";
             }
@@ -727,26 +732,26 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
     void TargetSpace::load_fields(ifstream& loadfile, int totalSize){
         for(int i = 0; i < fields1.size(); i++){
             for(int j =0; j < totalSize; j++){
-                for(int k = 0; k < fields1[i].data[j].size(); k++){
-                   loadfile >> fields1[i].data[j](k);
+                for(int k = 0; k < fields1[i]->data[j].size(); k++){
+                   loadfile >> fields1[i]->data[j](k);
                 }
             }
         }
         for(int i = 0; i < fields2.size(); i++){
             for(int j =0; j < totalSize; j++){
-                loadfile >> fields2[i].data[j];
+                loadfile >> fields2[i]->data[j];
             }
         }
         for(int i = 0; i < fields3.size(); i++){
             for(int j =0; j < totalSize; j++){
-                loadfile >> fields3[i].data[j];
+                loadfile >> fields3[i]->data[j];
             }
         }
         for(int i = 0; i < fields4.size(); i++){
             for(int j =0; j < totalSize; j++) {
-                for(int k = 0; k < fields4[i].data[j].rows(); k++){
-                for(int h = 0; h < fields4[i].data[j].cols(); h++){
-                    loadfile >> fields4[i].data[j](k,h);
+                for(int k = 0; k < fields4[i]->data[j].rows(); k++){
+                for(int h = 0; h < fields4[i]->data[j].cols(); h++){
+                    loadfile >> fields4[i]->data[j](k,h);
                 }}
             }
         }
@@ -754,46 +759,46 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
 
     void TargetSpace::update_fields(){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].update_field();
+            fields1[i]->update_field();
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].update_field();
+            fields2[i]->update_field();
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].update_field();
+            fields3[i]->update_field();
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].update_field();
+            fields4[i]->update_field();
         }
     }
 
     void TargetSpace::update_gradients(double dt){
         for(int i = 0; i < fields1.size(); i++){
-            fields1[i].update_gradient(dt);
+            fields1[i]->update_gradient(dt);
         }
         for(int i = 0; i < fields2.size(); i++){
-            fields2[i].update_gradient(dt);
+            fields2[i]->update_gradient(dt);
         }
         for(int i = 0; i < fields3.size(); i++){
-            fields3[i].update_gradient(dt);
+            fields3[i]->update_gradient(dt);
         }
         for(int i = 0; i < fields4.size(); i++){
-            fields4[i].update_gradient(dt);
+            fields4[i]->update_gradient(dt);
         }
     }
 
     void TargetSpace::update_RK4(int k, int pos){
         for(int i = 0; i < fields1.size(); i++){
-            if(fields1[i].dynamic){fields1[i].updateRK4(k, pos);}
+            if(fields1[i]->dynamic){fields1[i]->updateRK4(k, pos);}
         }
         for(int i = 0; i < fields2.size(); i++){
-            if(fields2[i].dynamic){fields2[i].updateRK4(k, pos);}
+            if(fields2[i]->dynamic){fields2[i]->updateRK4(k, pos);}
         }
         for(int i = 0; i < fields3.size(); i++){
-            if(fields3[i].dynamic){fields3[i].updateRK4(k, pos);}
+            if(fields3[i]->dynamic){fields3[i]->updateRK4(k, pos);}
         }
         for(int i = 0; i < fields4.size(); i++){
-            if(fields4[i].dynamic){fields4[i].updateRK4(k, pos);}
+            if(fields4[i]->dynamic){fields4[i]->updateRK4(k, pos);}
         }
     }
 /***********************/
@@ -860,6 +865,8 @@ void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
     std::random_device rd;
     std::mt19937 mt(rd());
     std::uniform_int_distribution<int> f_rand(0, fields.no_fields-1);
+    int no_total = 0;
+    int no = 0;
     #pragma omp parallel
     {
         int sep = getTotalSize()/omp_get_num_threads();
@@ -868,7 +875,7 @@ void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
         double newEnergyDensity[1+2*dim+4*dim*dim];
         int store = 0;
         std::uniform_int_distribution<int> p_rand(omp_get_thread_num()*sep,omp_get_thread_num()*sep + sep - 1 );
-        for (int no = 0; no < iterations; no++) {
+        while (no_total<iterations) {
             int pos = -1;
             while (!inBoundary(pos)) {
                 pos = p_rand(mt);// correct to right random no. generator
@@ -983,10 +990,16 @@ void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
                 #pragma omp barrier
                 #pragma omp master
                 {
+                    no_total++;
                     updateEnergy();
-                    cout << no << ": the energy so far is " << energy << "\n";
+                    cout << no_total << ": the energy so far is " << energy << "\n";
+                    no=0;
                 }
                 #pragma omp barrier
+                }
+                #pragma omp master
+                {
+                no++;
                 }
         }
     }
@@ -1409,4 +1422,6 @@ void BaseFieldTheory::plotEnergy() {
 }
 
 }
+
+#endif
  // End FTPL namespace
