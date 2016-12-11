@@ -380,7 +380,7 @@ class TargetSpace {
         void cutKinetic(int pos);
         int no_fields;
         void storeDerivatives(BaseFieldTheory * theory);
-        void randomise(int i, int field, vector<double> spacing, bool normalise);
+        void randomise(int i, int field, vector<double> spacing, double dt, bool normalise);
         void derandomise(int i, int field, vector<double> spacing);
     private:
         // Add aditional Field types as they are created here!
@@ -424,7 +424,7 @@ class TargetSpace {
         double getTotalSpacing();
         void plotEnergy();
         void setMetricType(string type);
-        void annealing(int iterations, int often, bool normalise = false);
+        void annealing(int iterations, int often, int often_cut, bool normalise = false);
         template <class T>
         inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
@@ -450,13 +450,13 @@ class TargetSpace {
         vector<double *> parameters;
     };
 
-    void TargetSpace::randomise(int i, int field, vector<double> spacing, bool normalise){
+    void TargetSpace::randomise(int i, int field, vector<double> spacing, double dt, bool normalise){
         std::random_device rd;
         std::mt19937 mt(rd());
         if(field <= fields1.size()-1){
             Eigen::VectorXd value = fields1[field]->data[i];
+            std::uniform_real_distribution<double> dist(-dt, dt);
             for(int j = 0; j < value.size(); j++){
-                std::uniform_real_distribution<double> dist(fields1[field]->min[j], fields1[field]->max[j]);
                 value[j] = fields1[field]->data[i][j] + dist(mt);
             }
             if(normalise){
@@ -850,7 +850,7 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
         parameters.push_back(parameter_in);
     }
 
-void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
+void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool normalise){
     if(dynamic){
         cout << "Warning! You have run annealing on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
@@ -858,6 +858,8 @@ void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
         }
     }
     updateEnergy();
+    double check_energy = -1.0;
+    int cut_no = 0;
     int seperator = 2*getTotalSize()/size[dim-1];
     fields.storeDerivatives(this);
     setDerivatives = true;
@@ -881,7 +883,7 @@ void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
                 pos = p_rand(mt);// correct to right random no. generator
             }
             int field = f_rand(mt); // correct for int random no. generator
-            fields.randomise(pos, field, spacing, normalise);
+            fields.randomise(pos, field, spacing, dt, normalise);
             newEnergy = calculateEnergy(pos);
             oldEnergy = energydensity[pos];
             int store = 0;
@@ -994,6 +996,17 @@ void BaseFieldTheory::annealing(int iterations, int often, bool normalise){
                     updateEnergy();
                     cout << no_total << ": the energy so far is " << energy << "\n";
                     no=0;
+                    if(energy == check_energy){
+                        cut_no++;
+                        if(cut_no%often_cut == 0){
+                            dt = 0.9*dt;
+                            cut_no = 0;
+                        }
+                    }
+                    else{
+                        cut_no=0;
+                        check_energy = energy;
+                    }
                 }
                 #pragma omp barrier
                 }

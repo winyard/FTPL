@@ -7,7 +7,7 @@ int main() {
     double c1 = 0.141;
     double c2 = 0.198;
 
-    int choice = 3;
+    int choice = 1;
 
     Eigen::initParallel();
 
@@ -21,7 +21,7 @@ int main() {
         my_model.setSpacing({space, space, space});
         my_model.setParameters(0.0, 0.0, 0.0);
 
-        my_model.setTimeInterval(0.5 * space);
+        my_model.setTimeInterval(0.008);
 
         //my_model.addVectorMeson();
 
@@ -36,7 +36,7 @@ int main() {
 
         cout << "Time to test the anealing method!\n";
         Timer tmr;
-        my_model.annealing(10000, 500000, true);
+        my_model.annealing(10000, 1000000, 5, true);
         cout << "10 loops finished in " << tmr.elapsed() << " sec\n";
         cout << "ALL DONE!!\n";
     }
