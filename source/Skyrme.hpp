@@ -30,6 +30,7 @@ namespace FTPL {
         CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
         CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) calculateEnergy(int pos); // RETURN TO FINAL OR CHECK TO SEE IF THIS AFFECTS SPEED!!! FOR INLINE IT REALLY SHOUDLNT BUT CHECK!!!!!!
         CUDA_HOSTDEV inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
+        CUDA_HOSTDEV inline __attribute__((always_inline)) double levi(int i, int j, int k, int l);
         //Other Useful functions
         CUDA_HOSTDEV virtual void initialCondition(int B, double x_in, double y_in, double z_in, double phi);
         CUDA_HOSTDEV double initial(double r);
@@ -47,6 +48,14 @@ namespace FTPL {
         double charge;
         vector<double> chargedensity;
     };
+
+    double SkyrmeModel::levi(int i, int j, int k, int l){
+        int levi(int i, int j, int k, int l)
+        {
+            if((i==j)||(i==k)||(i==l)||(j==k)||(j==l)||(k==l)) return 0;
+            else return ( (i-j)*(i-k)*(i-l)*(j-k)*(j-l)*(k-l)/12 );
+        }
+    }
 
     inline void SkyrmeModel::RK4calc(int pos){
         if(inBoundary(pos)) {
