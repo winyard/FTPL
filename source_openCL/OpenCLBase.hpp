@@ -3,44 +3,60 @@
  * Copyright Thomas Winyard 2016
  */
 
-#ifndef SKYRME_H
-#define SKYRME_H
+#ifndef GPU_H
+#define GPU_H
 
-#ifdef __CUDACC__
-#define CUDA_HOSTDEV __host__ __device__
-#else
-#define CUDA_HOSTDEV
-#endif
-
-#include <cmath>
 #include "FieldTheories.hpp"
 #include <Eigen/Dense>
-#include "RationalMaps.hpp"
 
 using namespace std;
 
 namespace FTPL {
+
+    template<class T>
+    void upload(T * object){
+        cudaError_t cudaStatus;
+
+        cudaStatus = cudaMalloc((void**)object, size * sizeof(T));
+
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "cudaMalloc failed in GPU.hpp!");
+            goto label1;
+        }
+
+        cudaStatus = cudaMemcpy(darr, arr, size * sizeof(MyClass), cudaMemcpyHostToDevice);
+        //arr is a host array
+
+
+        MyClass arr[10];
+        MyClass *darr;
+        const size_t sz = size_t(10) * sizeof(MyClass);
+        cudaMalloc((void**)&darr, sizeof(T));
+        cudaMemcpy(darr, &arr[0], sz, cudaMemcpyHostToDevice);
+
+
+    }
 
     class SkyrmeModel : public BaseFieldTheory {
     public:
         //place your fields here (likely to need to acces them publicly)
         Field<Eigen::VectorXd> * f;
         //maths (higher up functions run slightly faster these are the important ones!)
-        CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
-        CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
-        CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) calculateEnergy(int pos); // RETURN TO FINAL OR CHECK TO SEE IF THIS AFFECTS SPEED!!! FOR INLINE IT REALLY SHOUDLNT BUT CHECK!!!!!!
-        CUDA_HOSTDEV inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
+        inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
+        inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
+        inline virtual double __attribute__((always_inline)) calculateEnergy(int pos); // RETURN TO FINAL OR CHECK TO SEE IF THIS AFFECTS SPEED!!! FOR INLINE IT REALLY SHOUDLNT BUT CHECK!!!!!!
+        inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
         //Other Useful functions
-        CUDA_HOSTDEV virtual void initialCondition(int B, double x_in, double y_in, double z_in, double phi);
-        CUDA_HOSTDEV double initial(double r);
+        virtual void initialCondition(int B, double x_in, double y_in, double z_in, double phi);
+        double initial(double r);
         //required functions
-        CUDA_HOSTDEV SkyrmeModel(const char * filepath, bool isDynamic = false);
-        CUDA_HOSTDEV SkyrmeModel(int width, int height, int depth, bool isDynamic = false);
-        CUDA_HOSTDEV ~SkyrmeModel(){};
-        CUDA_HOSTDEV void setParameters(double Fpi_in, double epi_in, double mpi);
-        CUDA_HOSTDEV double calculateCharge(int pos);
-        CUDA_HOSTDEV double getCharge(){return charge;};
-        CUDA_HOSTDEV void updateCharge();
+        SkyrmeModel(const char * filepath, bool isDynamic = false);
+        SkyrmeModel(int width, int height, int depth, bool isDynamic = false);
+        ~SkyrmeModel(){};
+        void setParameters(double Fpi_in, double epi_in, double mpi);
+        double calculateCharge(int pos);
+        double getCharge(){return charge;};
+        void updateCharge();
     private:
         // parameters
         double Fpi, epi, mpi;

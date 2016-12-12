@@ -6,6 +6,12 @@
 #ifndef SKYRME_VECTOR_H
 #define SKYRME_VECTOR_H
 
+#ifdef __CUDACC__
+#define CUDA_HOSTDEV __host__ __device__
+#else
+#define CUDA_HOSTDEV
+#endif
+
 #include "Skyrme.hpp"
 
 using namespace std;
@@ -15,12 +21,12 @@ namespace FTPL {
     class SkyrmeModelwithMeson : public SkyrmeModel {
     public:
         bool withVector = false;
-        SkyrmeModelwithMeson(int width, int height, int depth, bool isDynamic): SkyrmeModel(width,height,depth,isDynamic){};
-        double RhoEnergy(int field_no, int i, int j);
-        inline virtual double __attribute__((always_inline)) calculateEnergy(int pos) final;
-        void addVectorMeson();
-        virtual void initialCondition(int B, double x_in, double y_in, double z_in, double phi);
-        double vectorprofile(double r);
+        CUDA_HOSTDEV  SkyrmeModelwithMeson(int width, int height, int depth, bool isDynamic): SkyrmeModel(width,height,depth,isDynamic){};
+        CUDA_HOSTDEV  double RhoEnergy(int field_no, int i, int j);
+        CUDA_HOSTDEV  inline virtual double __attribute__((always_inline)) calculateEnergy(int pos) final;
+        CUDA_HOSTDEV  void addVectorMeson();
+        CUDA_HOSTDEV  virtual void initialCondition(int B, double x_in, double y_in, double z_in, double phi);
+        CUDA_HOSTDEV  double vectorprofile(double r);
     private:
         vector<vector<Field<Eigen::VectorXd>*>> mesons;
         double c1 = 0.141;

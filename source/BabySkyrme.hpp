@@ -19,21 +19,21 @@ class BabySkyrmeModel : public BaseFieldTheory {
 	//place your fields here (likely to need to acces them publicly)
 		Field<Eigen::VectorXd> * f; // using Xd (general size) is dangerous as sizes are often derived! ALways define a dimension ahead of time!
     //maths (higher up functions run slightly faster these are the important ones!)
-        inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
-		inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
-		inline virtual double __attribute__((always_inline)) calculateEnergy(int pos) final;
-		inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
+		CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
+		CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
+		CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) calculateEnergy(int pos) final;
+		CUDA_HOSTDEV inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
 	//Other Useful functions
-		void initialCondition(int B, double x_in, double y_in, double phi);
-		double initial(double r);
+		CUDA_HOSTDEV void initialCondition(int B, double x_in, double y_in, double phi);
+		CUDA_HOSTDEV double initial(double r);
 	//required functions
-	BabySkyrmeModel(const char * filepath, bool isDynamic = false);
-	BabySkyrmeModel(int width, int height, bool isDynamic = false);
-	~BabySkyrmeModel(){};
-	void setParameters(double mu_in, double mpi_in);
-	double calculateCharge(int pos);
-	double getCharge(){return charge;};
-	void updateCharge();
+		CUDA_HOSTDEV BabySkyrmeModel(const char * filepath, bool isDynamic = false);
+		CUDA_HOSTDEV BabySkyrmeModel(int width, int height, bool isDynamic = false);
+		CUDA_HOSTDEV ~BabySkyrmeModel(){};
+		CUDA_HOSTDEV void setParameters(double mu_in, double mpi_in);
+		CUDA_HOSTDEV double calculateCharge(int pos);
+		CUDA_HOSTDEV double getCharge(){return charge;};
+		CUDA_HOSTDEV void updateCharge();
 	private:
 	// parameters
 		double mu, mpi;

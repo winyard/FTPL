@@ -7,6 +7,12 @@
 #ifndef FIELD_THEORIES_H
 #define FIELD_THEORIES_H
 
+#ifdef __CUDACC__
+#define CUDA_HOSTDEV __host__ __device__
+#else
+#define CUDA_HOSTDEV
+#endif
+
 #include <cmath>
 
 #include "Exceptions.hpp"
@@ -64,30 +70,30 @@ class Field {
         T max;
         bool dynamic;
 	    int dim;
-        inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
-        inline void  __attribute__((always_inline)) setBuffer(const T value, vector<int> &pos);
-		Field(int d, vector<int> size, bool isdynamic);
-        ~Field(){};
-		inline T operator()(...); // TO BE WRITTEN
-        inline const vector<T> getData();
-        vector<int> getSize();
-        int getSize(int com);
-        inline int __attribute__((always_inline)) getTotalSize();
-        inline void  __attribute__((always_inline)) setData(vector<T> datain);
-		inline void  __attribute__((always_inline)) setData(T value, vector<int> pos);
-        void fill(T value);
-        void fill_dt(T value);
-		void save_field(ofstream& output);
-		void load_field(ifstream& input);
-		void normalise();
-        void update_field();
-        void update_gradient(double dt);
-        inline void updateRK4(int k);
-        inline void updateRK4(int k, int i);
-        void resize(vector<int> sizein);
-        void progressTime(double time_step);
-        void update_derivatives(vector<double> spacing);
-        void alter_point(int i, T value, vector<double> spacing);
+        CUDA_HOSTDEV inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
+        CUDA_HOSTDEV inline void  __attribute__((always_inline)) setBuffer(const T value, vector<int> &pos);
+        CUDA_HOSTDEV Field(int d, vector<int> size, bool isdynamic);
+        CUDA_HOSTDEV ~Field(){};
+        CUDA_HOSTDEV inline T operator()(...); // TO BE WRITTEN
+        CUDA_HOSTDEV inline const vector<T> getData();
+        CUDA_HOSTDEV vector<int> getSize();
+        CUDA_HOSTDEV int getSize(int com);
+        CUDA_HOSTDEV inline int __attribute__((always_inline)) getTotalSize();
+        CUDA_HOSTDEV inline void  __attribute__((always_inline)) setData(vector<T> datain);
+        CUDA_HOSTDEV inline void  __attribute__((always_inline)) setData(T value, vector<int> pos);
+        CUDA_HOSTDEV void fill(T value);
+        CUDA_HOSTDEV void fill_dt(T value);
+        CUDA_HOSTDEV void save_field(ofstream& output);
+        CUDA_HOSTDEV void load_field(ifstream& input);
+        CUDA_HOSTDEV void normalise();
+        CUDA_HOSTDEV void update_field();
+        CUDA_HOSTDEV void update_gradient(double dt);
+        CUDA_HOSTDEV inline void updateRK4(int k);
+        CUDA_HOSTDEV inline void updateRK4(int k, int i);
+        CUDA_HOSTDEV void resize(vector<int> sizein);
+        CUDA_HOSTDEV void progressTime(double time_step);
+        CUDA_HOSTDEV void update_derivatives(vector<double> spacing);
+        CUDA_HOSTDEV void alter_point(int i, T value, vector<double> spacing);
     protected:
 		vector<int>  size;
         vector<vector<T>> k_sum;
@@ -361,27 +367,25 @@ void Field<T>::resize(vector<int> sizein) { // resize the fields for different a
 
 class TargetSpace {
     public:
-        TargetSpace();
-        ~TargetSpace(){};
-        template<class T>
-        inline Field<T> * field(int i);
-        Field<Eigen::VectorXd> * addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic);
-        Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic);
-        Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic);
-        Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic);
-        void resize(vector<int> sizein);
-        void load_fields(ifstream& loadfile, int totalSize);
-        void save_fields(ofstream& savefile, int totalSize);
-        void update_fields();
-        void update_gradients(double dt);
-        void update_RK4(int k, int pos);
-        void normalise();
-        void moveToBuffer();
-        void cutKinetic(int pos);
-        int no_fields;
-        void storeDerivatives(BaseFieldTheory * theory);
-        void randomise(int i, int field, vector<double> spacing, double dt, bool normalise);
-        void derandomise(int i, int field, vector<double> spacing);
+        CUDA_HOSTDEV TargetSpace();
+        CUDA_HOSTDEV ~TargetSpace(){};
+        CUDA_HOSTDEV    Field<Eigen::VectorXd> * addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic);
+        CUDA_HOSTDEV  Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic);
+        CUDA_HOSTDEV   Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic);
+        CUDA_HOSTDEV   Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic);
+        CUDA_HOSTDEV     void resize(vector<int> sizein);
+        CUDA_HOSTDEV  void load_fields(ifstream& loadfile, int totalSize);
+        CUDA_HOSTDEV   void save_fields(ofstream& savefile, int totalSize);
+        CUDA_HOSTDEV   void update_fields();
+        CUDA_HOSTDEV   void update_gradients(double dt);
+        CUDA_HOSTDEV   void update_RK4(int k, int pos);
+        CUDA_HOSTDEV   void normalise();
+        CUDA_HOSTDEV    void moveToBuffer();
+        CUDA_HOSTDEV   void cutKinetic(int pos);
+        CUDA_HOSTDEV   int no_fields;
+        CUDA_HOSTDEV   void storeDerivatives(BaseFieldTheory * theory);
+        CUDA_HOSTDEV   void randomise(int i, int field, vector<double> spacing, double dt, bool normalise);
+        CUDA_HOSTDEV void derandomise(int i, int field, vector<double> spacing);
     private:
         // Add aditional Field types as they are created here!
         std::vector<Field<Eigen::VectorXd>*> fields1;
@@ -393,48 +397,48 @@ class TargetSpace {
     class BaseFieldTheory {
     public:
         int dim;
-        BaseFieldTheory(int d, vector<int> size, bool isDynamic); // TO BE WRITTEN
-        ~BaseFieldTheory(){};
-        inline vector<int> next(vector<int> current);
-        inline vector<int>  __attribute__((always_inline)) convert(int in);
-        inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
-        inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
-        inline virtual void __attribute__((always_inline)) RK4calc(int i);
-        inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
-        void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
-        void save(const char * savepath); // TO BE WRITTEN
-        void load(const char * loadpath); // TO BE WRITTEN
-        void plot(const char * plotpath); // TO BE WRITTEN
-        void spaceTransformation(); // TO BE WRITTEN
+        CUDA_HOSTDEV  BaseFieldTheory(int d, vector<int> size, bool isDynamic); // TO BE WRITTEN
+        CUDA_HOSTDEV ~BaseFieldTheory(){};
+        CUDA_HOSTDEV inline vector<int> next(vector<int> current);
+        CUDA_HOSTDEV inline vector<int>  __attribute__((always_inline)) convert(int in);
+        CUDA_HOSTDEV    inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
+        CUDA_HOSTDEV inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
+        CUDA_HOSTDEV  inline virtual void __attribute__((always_inline)) RK4calc(int i);
+        CUDA_HOSTDEV  inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
+        CUDA_HOSTDEV void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
+        CUDA_HOSTDEV  void save(const char * savepath); // TO BE WRITTEN
+        CUDA_HOSTDEV void load(const char * loadpath); // TO BE WRITTEN
+        CUDA_HOSTDEV  void plot(const char * plotpath); // TO BE WRITTEN
+        CUDA_HOSTDEV   void spaceTransformation(); // TO BE WRITTEN
         template <class T>
-        void fieldTransformation(T tranformation); // TO BE WRITTEN
-        void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
-        void setStandardMetric(string type);
-        void updateEnergy(); // TO BE WRITTEN
-        void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
-        void setTimeInterval(double dt_in);
-        double getEnergy(){return energy;};
-        inline bool inBoundary(vector<int> pos);
-        inline bool inBoundary(int pos);
-        inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
-        inline  void setSpacing(vector<double> spacein);
-        void addParameter( double * parameter_in);
-        vector<double> getSpacing();
-        int getTotalSize();
-        double getTotalSpacing();
-        void plotEnergy();
-        void setMetricType(string type);
-        void annealing(int iterations, int often, int often_cut, bool normalise = false);
+        CUDA_HOSTDEV  void fieldTransformation(T tranformation); // TO BE WRITTEN
+        CUDA_HOSTDEV   void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
+        CUDA_HOSTDEV  void setStandardMetric(string type);
+        CUDA_HOSTDEV   void updateEnergy(); // TO BE WRITTEN
+        CUDA_HOSTDEV  void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
+        CUDA_HOSTDEV  void setTimeInterval(double dt_in);
+        CUDA_HOSTDEV   double getEnergy(){return energy;};
+        CUDA_HOSTDEV inline bool inBoundary(vector<int> pos);
+        CUDA_HOSTDEV  inline bool inBoundary(int pos);
+        CUDA_HOSTDEV  inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
+        CUDA_HOSTDEV  inline  void setSpacing(vector<double> spacein);
+        CUDA_HOSTDEV  void addParameter( double * parameter_in);
+        CUDA_HOSTDEV  vector<double> getSpacing();
+        CUDA_HOSTDEV   int getTotalSize();
+        CUDA_HOSTDEV   double getTotalSpacing();
+        CUDA_HOSTDEV  void plotEnergy();
+        CUDA_HOSTDEV  void setMetricType(string type);
+        CUDA_HOSTDEV   void annealing(int iterations, int often, int often_cut, bool normalise = false);
         template <class T>
-        inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
+        CUDA_HOSTDEV inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
-        inline T single_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
+        CUDA_HOSTDEV inline T single_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
-        inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
+        CUDA_HOSTDEV inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
     protected:
         int metric_type = 0;
         template <class T>
-        Field<T> * createField(Field<T> * target, bool isDynamic);
+        CUDA_HOSTDEV Field<T> * createField(Field<T> * target, bool isDynamic);
         //vector<unique_ptr<Field>> fields;
         TargetSpace fields;
         vector<int> bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
@@ -641,22 +645,6 @@ void TargetSpace::normalise(){
 TargetSpace::TargetSpace(){
     no_fields = 0;
 }
-
-    template<class T>
-    Field<T> * TargetSpace::field(int i){
-        if(i <= fields1.size()-1){
-            return  fields1[i];
-        }
-        else if(i <= fields1.size() + fields2.size() - 1){
-            return fields2[i-fields1.size()];
-        }
-        else if(i <= fields1.size() + fields2.size() +fields3.size() -1){
-            return fields3[i-fields1.size()-fields2.size()];
-        }
-        else{
-            return fields4[i-fields1.size()-fields2.size()-fields3.size() - 1];
-        }
-    }
 
 void TargetSpace::resize(vector<int> sizein){
     for(int i = 0; i < fields1.size(); i++){
