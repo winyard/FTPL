@@ -104,19 +104,17 @@ BabySkyrmeModel::BabySkyrmeModel(int width, int height, bool isDynamic): BaseFie
     Eigen::Vector3d maximum(0.01,0.01,0.01);
     f->min = minimum;
     f->max = maximum;
-    addParameter(&mu); // need to add any parameters that you want to be saved/loaded when using the .save/.load function (always add them in the same order!)
-    addParameter(&mpi);
-	chargedensity.resize(getTotalSize()); // need to resize charge density as this is not included in the BaseFieldTheory
+    addParameter(&mu, "mu"); // need to add any parameters that you want to be saved/loaded when using the .save/.load function (always add them in the same order!)
+    addParameter(&mpi, "mpi");
 };
 
 
 BabySkyrmeModel::BabySkyrmeModel(const char * filename, bool isDynamic): BaseFieldTheory(2, {2,2}, isDynamic){
     // mearly place holders so the fields can be initialised
 	f = createField(f, isDynamic);
-    addParameter(&mu);
-    addParameter(&mpi);
+    addParameter(&mu, "mu");
+    addParameter(&mpi, "mpi");
     load(filename);
-	chargedensity.resize(getTotalSize());
 };
 
 //maths!

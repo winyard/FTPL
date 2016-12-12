@@ -7,9 +7,26 @@ int main() {
     double c1 = 0.141;
     double c2 = 0.198;
 
-    int choice = 1;
+    int choice = 0;
 
     Eigen::initParallel();
+
+    if(choice == 0){
+        FTPL::SkyrmeModelwithMeson my_model(10,10,10,false);
+        my_model.load("temp_field", false);
+        my_model.updateEnergy();
+        my_model.updateCharge();
+        cout << "the loaded model has energy = " << my_model.getEnergy() << " and charge = " << my_model.getCharge() << "\n";
+        my_model.printParameters();
+        my_model.setTimeInterval(0.005);
+        my_model.addVectorMeson();
+        cout << "vector meson added\n";
+        my_model.updateEnergy();
+        my_model.updateCharge();
+        cout << "the loaded model with added vector meson has energy = " << my_model.getEnergy() << " and charge = " << my_model.getCharge() << "\n";
+        my_model.annealing(100, 1000000, 1, true);
+        my_model.save("temp_field");
+    }
 
     if(choice == 1) {
         FTPL::SkyrmeModelwithMeson my_model(100, 100, 100, false);
@@ -20,6 +37,7 @@ int main() {
         double space = 0.15;
         my_model.setSpacing({space, space, space});
         my_model.setParameters(0.0, 0.0, 0.0);
+        my_model.printParameters();
 
         my_model.setTimeInterval(0.008);
 
@@ -36,9 +54,9 @@ int main() {
 
         cout << "Time to test the anealing method!\n";
         Timer tmr;
-        my_model.annealing(10000, 1000000, 3, true);
+        my_model.annealing(5, 1000000, 1, true);
         cout << "10 loops finished in " << tmr.elapsed() << " sec\n";
-        cout << "ALL DONE!!\n";
+        my_model.save("temp_field");
     }
 
     if(choice == 2) {
@@ -91,9 +109,11 @@ int main() {
         my_model.plotEnergy();
         cout << "GOGOGO!\n";
         Timer tmr;
-        my_model.RK4(600, true, true, 10);
+        my_model.RK4(20, true, true, 10);
         cout << "1000 loops finished in " << tmr.elapsed() << " sec\n";
         my_model.updateEnergy();
+        my_model.updateCharge();
+        cout << "charge = " << my_model.getCharge() << "\n";
         my_model.plotEnergy();
         my_model.setTimeInterval(0.5 * space * space * space);
         my_model.gradientFlow(1000, 100, true);

@@ -90,7 +90,7 @@ class Field {
         CUDA_HOSTDEV void update_gradient(double dt);
         CUDA_HOSTDEV inline void updateRK4(int k);
         CUDA_HOSTDEV inline void updateRK4(int k, int i);
-        CUDA_HOSTDEV void resize(vector<int> sizein);
+        CUDA_HOSTDEV Field<T>* resize(vector<int> sizein);
         CUDA_HOSTDEV void progressTime(double time_step);
         CUDA_HOSTDEV void update_derivatives(vector<double> spacing);
         CUDA_HOSTDEV void alter_point(int i, T value, vector<double> spacing);
@@ -344,7 +344,7 @@ void Field<T>::update_field() { // moves the buffer values to the data
 
 
 template <class T>
-void Field<T>::resize(vector<int> sizein) { // resize the fields for different accuracy
+Field<T>* Field<T>::resize(vector<int> sizein) { // resize the fields for different accuracy
     if(size.size() == sizein.size()) {
         size = sizein;
         data.resize(getTotalSize());
@@ -354,11 +354,14 @@ void Field<T>::resize(vector<int> sizein) { // resize the fields for different a
             buffer_dt.resize(getTotalSize());
             k_sum[0].resize(getTotalSize());
             k_sum[1].resize(getTotalSize());
+            k0_result.resize(getTotalSize());
+            k1_result.resize(getTotalSize());
         }
     }
     else{
         cout << "Tried to resize field with incorrect size of dimension vector!\n";
     }
+    return this;
 }
 
 /***********************/
@@ -369,29 +372,34 @@ class TargetSpace {
     public:
         CUDA_HOSTDEV TargetSpace();
         CUDA_HOSTDEV ~TargetSpace(){};
-        CUDA_HOSTDEV    Field<Eigen::VectorXd> * addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic);
-        CUDA_HOSTDEV  Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic);
-        CUDA_HOSTDEV   Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic);
-        CUDA_HOSTDEV   Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic);
-        CUDA_HOSTDEV     void resize(vector<int> sizein);
-        CUDA_HOSTDEV  void load_fields(ifstream& loadfile, int totalSize);
-        CUDA_HOSTDEV   void save_fields(ofstream& savefile, int totalSize);
-        CUDA_HOSTDEV   void update_fields();
-        CUDA_HOSTDEV   void update_gradients(double dt);
-        CUDA_HOSTDEV   void update_RK4(int k, int pos);
-        CUDA_HOSTDEV   void normalise();
-        CUDA_HOSTDEV    void moveToBuffer();
-        CUDA_HOSTDEV   void cutKinetic(int pos);
-        CUDA_HOSTDEV   int no_fields;
-        CUDA_HOSTDEV   void storeDerivatives(BaseFieldTheory * theory);
-        CUDA_HOSTDEV   void randomise(int i, int field, vector<double> spacing, double dt, bool normalise);
+        CUDA_HOSTDEV Field<Eigen::VectorXd> * addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic);
+        CUDA_HOSTDEV Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic);
+        CUDA_HOSTDEV Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic);
+        CUDA_HOSTDEV Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic);
+        CUDA_HOSTDEV void resize(vector<int> sizein);
+        CUDA_HOSTDEV void load_fields(ifstream& loadfile, int totalSize);
+        CUDA_HOSTDEV void save_fields(ofstream& savefile, int totalSize);
+        CUDA_HOSTDEV void update_fields();
+        CUDA_HOSTDEV void update_gradients(double dt);
+        CUDA_HOSTDEV void update_RK4(int k, int pos);
+        CUDA_HOSTDEV void normalise();
+        CUDA_HOSTDEV void moveToBuffer();
+        CUDA_HOSTDEV void cutKinetic(int pos);
+        CUDA_HOSTDEV int no_fields;
+        CUDA_HOSTDEV void storeDerivatives(BaseFieldTheory * theory);
+        CUDA_HOSTDEV void randomise(int i, int field, vector<double> spacing, double dt, bool normalise);
         CUDA_HOSTDEV void derandomise(int i, int field, vector<double> spacing);
+        CUDA_HOSTDEV void resetPointers();
     private:
         // Add aditional Field types as they are created here!
         std::vector<Field<Eigen::VectorXd>*> fields1;
+        std::vector<Field<Eigen::VectorXd>**> fields1_pointers;
         std::vector<Field<double>*> fields2;
+        std::vector<Field<double>**> fields2_pointers;
         std::vector<Field<int>*> fields3;
+        std::vector<Field<int>**> fields3_pointers;
         std::vector<Field<Eigen::MatrixXd>*> fields4;
+        std::vector<Field<Eigen::MatrixXd>**> fields4_pointers;
 };
 
     class BaseFieldTheory {
@@ -401,40 +409,44 @@ class TargetSpace {
         CUDA_HOSTDEV ~BaseFieldTheory(){};
         CUDA_HOSTDEV inline vector<int> next(vector<int> current);
         CUDA_HOSTDEV inline vector<int>  __attribute__((always_inline)) convert(int in);
-        CUDA_HOSTDEV    inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
+        CUDA_HOSTDEV inline virtual void calculateGradientFlow(int pos); // TO BE WRITTEN
         CUDA_HOSTDEV inline virtual double calculateEnergy(int pos);// TO BE WRITTEN
-        CUDA_HOSTDEV  inline virtual void __attribute__((always_inline)) RK4calc(int i);
-        CUDA_HOSTDEV  inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
+        CUDA_HOSTDEV inline virtual double calculateCharge(int pos);
+        CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int i);
+        CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
         CUDA_HOSTDEV void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
-        CUDA_HOSTDEV  void save(const char * savepath); // TO BE WRITTEN
-        CUDA_HOSTDEV void load(const char * loadpath); // TO BE WRITTEN
-        CUDA_HOSTDEV  void plot(const char * plotpath); // TO BE WRITTEN
-        CUDA_HOSTDEV   void spaceTransformation(); // TO BE WRITTEN
+        CUDA_HOSTDEV void save(const char * savepath); // TO BE WRITTEN
+        CUDA_HOSTDEV void load(const char * loadpath, bool message = true); // TO BE WRITTEN
+        CUDA_HOSTDEV void plot(const char * plotpath); // TO BE WRITTEN
+        CUDA_HOSTDEV void spaceTransformation(); // TO BE WRITTEN
         template <class T>
-        CUDA_HOSTDEV  void fieldTransformation(T tranformation); // TO BE WRITTEN
-        CUDA_HOSTDEV   void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
-        CUDA_HOSTDEV  void setStandardMetric(string type);
-        CUDA_HOSTDEV   void updateEnergy(); // TO BE WRITTEN
-        CUDA_HOSTDEV  void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
-        CUDA_HOSTDEV  void setTimeInterval(double dt_in);
-        CUDA_HOSTDEV   double getEnergy(){return energy;};
+        CUDA_HOSTDEV void fieldTransformation(T tranformation); // TO BE WRITTEN
+        CUDA_HOSTDEV void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
+        CUDA_HOSTDEV void setStandardMetric(string type);
+        CUDA_HOSTDEV void updateEnergy(); // TO BE WRITTEN
+        CUDA_HOSTDEV void updateCharge();
+        CUDA_HOSTDEV void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
+        CUDA_HOSTDEV void setTimeInterval(double dt_in);
+        CUDA_HOSTDEV double getEnergy(){return energy;};
         CUDA_HOSTDEV inline bool inBoundary(vector<int> pos);
-        CUDA_HOSTDEV  inline bool inBoundary(int pos);
-        CUDA_HOSTDEV  inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
-        CUDA_HOSTDEV  inline  void setSpacing(vector<double> spacein);
-        CUDA_HOSTDEV  void addParameter( double * parameter_in);
-        CUDA_HOSTDEV  vector<double> getSpacing();
-        CUDA_HOSTDEV   int getTotalSize();
-        CUDA_HOSTDEV   double getTotalSpacing();
-        CUDA_HOSTDEV  void plotEnergy();
-        CUDA_HOSTDEV  void setMetricType(string type);
-        CUDA_HOSTDEV   void annealing(int iterations, int often, int often_cut, bool normalise = false);
+        CUDA_HOSTDEV inline bool inBoundary(int pos);
+        CUDA_HOSTDEV inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos);
+        CUDA_HOSTDEV inline  void setSpacing(vector<double> spacein);
+        CUDA_HOSTDEV void addParameter( double * parameter_in, string name);
+        CUDA_HOSTDEV vector<double> getSpacing();
+        CUDA_HOSTDEV int getTotalSize();
+        CUDA_HOSTDEV double getTotalSpacing();
+        CUDA_HOSTDEV void plotEnergy();
+        CUDA_HOSTDEV void printParameters();
+        CUDA_HOSTDEV void setMetricType(string type);
+        CUDA_HOSTDEV void annealing(int iterations, int often, int often_cut, bool normalise = false);
         template <class T>
         CUDA_HOSTDEV inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
         CUDA_HOSTDEV inline T single_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
         CUDA_HOSTDEV inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
+        CUDA_HOSTDEV double getCharge(){return charge;};
     protected:
         int metric_type = 0;
         template <class T>
@@ -447,12 +459,22 @@ class TargetSpace {
         double energy, potential, kinetic;
         vector<double> spacing;
         vector<int> size;
+        vector<double> chargedensity;
+        double charge;
         double dt;
         bool dynamic;
         bool curved = false;
         bool setDerivatives = false;
         vector<double *> parameters;
+        vector<string> parameterNames;
     };
+
+    void BaseFieldTheory::printParameters(){
+        for(int i = 0; i < parameters.size(); i++){
+            cout << parameterNames[i] << ": " << *parameters[i] << " ";
+        }
+        cout << "\n";
+    }
 
     void TargetSpace::randomise(int i, int field, vector<double> spacing, double dt, bool normalise){
         std::random_device rd;
@@ -617,6 +639,21 @@ class TargetSpace {
 
     }
 
+    void TargetSpace::resetPointers(){
+        for(int i = 0; i < fields1.size(); i++){
+            fields1_pointers[i] = &fields1[i];
+        }
+        for(int i = 0; i < fields2.size(); i++){
+            fields2_pointers[i] = &fields2[i];
+        }
+        for(int i = 0; i < fields3.size(); i++){
+            fields3_pointers[i] = &fields3[i];
+        }
+        for(int i = 0; i < fields4.size(); i++){
+            fields4_pointers[i] = &fields4[i];
+        }
+    }
+
 void TargetSpace::cutKinetic(int pos){
     for(int i = 0; i < fields1.size(); i++){
         fields1[i]->dt[pos] = Eigen::VectorXd::Zero(fields1[i]->dt[pos].size());
@@ -648,39 +685,44 @@ TargetSpace::TargetSpace(){
 
 void TargetSpace::resize(vector<int> sizein){
     for(int i = 0; i < fields1.size(); i++){
-        fields1[i]->resize(sizein);
+        fields1[i] = fields1[i]->resize(sizein);
     }
     for(int i = 0; i < fields2.size(); i++){
-        fields2[i]->resize(sizein);
+        fields2[i] = fields2[i]->resize(sizein);
     }
     for(int i = 0; i < fields3.size(); i++){
-        fields3[i]->resize(sizein);
+        fields3[i] = fields3[i]->resize(sizein);
     }
     for(int i = 0; i < fields4.size(); i++){
-        fields4[i]->resize(sizein);
+        fields4[i] = fields4[i]->resize(sizein);
     }
+    resetPointers();
 }
 
 Field<Eigen::VectorXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic) {
     fields1.push_back(new Field < Eigen::VectorXd > (dim, size, isDynamic));
+    fields1_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields1[fields1.size() - 1];
 }
 
 Field<double> * TargetSpace::addField(int dim, vector<int> size, Field<double> * target, bool isDynamic) {
     fields2.push_back(new Field < double > (dim, size, isDynamic));
+    fields2_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields2[fields2.size() - 1];
 }
 
 Field<int> * TargetSpace::addField(int dim, vector<int> size, Field<int> * target, bool isDynamic) {
     fields3.push_back(new Field < int > (dim, size, isDynamic));
+    fields3_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields3[fields3.size() - 1];
 }
 
 Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic) {
     fields4.push_back(new Field < Eigen::MatrixXd > (dim, size, isDynamic));
+    fields4_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields4[fields4.size() - 1];
 }
@@ -689,6 +731,8 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
 
     void TargetSpace::save_fields(ofstream& savefile, int totalSize){
         for(int i = 0; i < fields1.size(); i++){
+            savefile << fields1[i]->data[0].size();
+            savefile << "\n";
             for(int j =0; j < totalSize; j++) {
                 for(int k = 0; k < fields1[i]->data[j].size(); k++) {
                     savefile << fields1[i]->data[j](k) << " ";
@@ -707,6 +751,9 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
             }
         }
         for(int i = 0; i < fields4.size(); i++){
+            savefile << fields4[i]->data[0].rows();
+            savefile << fields4[i]->data[0].cols();
+            savefile << "\n";
             for(int j =0; j < totalSize; j++) {
                 for(int k = 0; k < fields4[i]->data[j].rows(); k++) {
                 for(int h = 0; h < fields4[i]->data[j].cols(); h++){
@@ -719,8 +766,11 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
 
     void TargetSpace::load_fields(ifstream& loadfile, int totalSize){
         for(int i = 0; i < fields1.size(); i++){
+            int target_dim;
+            loadfile >> target_dim;
             for(int j =0; j < totalSize; j++){
-                for(int k = 0; k < fields1[i]->data[j].size(); k++){
+                fields1[i]->data[j].resize(target_dim);
+                for(int k = 0; k < target_dim; k++){
                    loadfile >> fields1[i]->data[j](k);
                 }
             }
@@ -736,7 +786,11 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
             }
         }
         for(int i = 0; i < fields4.size(); i++){
+            int target_rows,target_cols;
+            loadfile >> target_rows;
+            loadfile >> target_cols;
             for(int j =0; j < totalSize; j++) {
+                fields4[i]->data[j].resize(target_rows,target_cols);
                 for(int k = 0; k < fields4[i]->data[j].rows(); k++){
                 for(int h = 0; h < fields4[i]->data[j].cols(); h++){
                     loadfile >> fields4[i]->data[j](k,h);
@@ -834,8 +888,9 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
         }
     }
 
-    void BaseFieldTheory::addParameter(double * parameter_in){
+    void BaseFieldTheory::addParameter(double * parameter_in, string name){
         parameters.push_back(parameter_in);
+        parameterNames.push_back(name);
     }
 
 void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool normalise){
@@ -982,7 +1037,9 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool n
                 {
                     no_total++;
                     updateEnergy();
-                    cout << no_total << ": the energy so far is " << energy <<  " : with dt = " << dt << "\n";
+                    updateCharge();
+                    cout << no_total << ": energy = " << energy <<  " : dt = " << dt << " charge = " << charge << "\n";
+                    save("temp_field");
                     no=0;
                     if(energy == check_energy){
                         cut_no++;
@@ -1109,6 +1166,7 @@ inline vector<double> calculateDynamicEnergy(int pos){
 BaseFieldTheory::BaseFieldTheory(int d, vector<int> sizein, bool isDynamic): dim(d), size(sizein){
         dynamic = isDynamic;
         energydensity.resize(getTotalSize());
+        chargedensity.resize(getTotalSize());
         energy = -1.0;
         // set deault spacing of dx = 1
         spacing.resize(dim);
@@ -1241,7 +1299,7 @@ inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, i
     }
 }
 
-void BaseFieldTheory::updateEnergy() { // only currently for 2-dim's!
+void BaseFieldTheory::updateEnergy() {
     if (dynamic) {
         double sumpot = 0.0;
         double sumkin = 0.0;
@@ -1273,10 +1331,30 @@ void BaseFieldTheory::updateEnergy() { // only currently for 2-dim's!
     }
 };
 
+void BaseFieldTheory::updateCharge(){
+        double sum = 0.0;
+    #pragma omp parallel for reduction(+:sum)
+        for(int i = 0; i < getTotalSize(); i++) {
+            if (inBoundary(i)) {
+                double buffer = calculateCharge(i);
+                chargedensity[i] = buffer;
+                sum += buffer;
+            }
+        }
+        charge = sum * getTotalSpacing();
+
+}
+
 inline double BaseFieldTheory::calculateEnergy(int pos)
 {
 cout << "ERROR! - either the incorrect number of parameters was entered into calculateEnergy or the calculateEnergy has not been set in the derived Field Theory class!\n";
 return -1.0;
+}
+
+inline double BaseFieldTheory::calculateCharge(int pos)
+{
+    cout << "ERROR! - either the incorrect number of parameters was entered into calculateCharge or the calculateCharge has not been set in the derived Field Theory class!\n";
+    return -1.0;
 }
 
 inline vector<double> BaseFieldTheory::calculateDynamicEnergy(int pos){
@@ -1364,46 +1442,83 @@ inline void BaseFieldTheory::calculateGradientFlow(int pos){
 }
 
 void BaseFieldTheory::save(const char * savepath){
-    cout << "saving to file " <<savepath << "\n";
     ofstream outf(savepath);
     //first output the derived class name to ensure loading the correct theory type!
     //first output dimensions of the field theory!
     for(int i = 0; i < dim; i++) {
         outf << size[i] << " " ;
     }
-    cout << "\n";
-    //second output the parameters of the field theory
-    for(int i = 0; i < parameters.size(); i++) {
-        outf << parameters[i] << " " ;
+    outf << "\n";
+    //second output the spacing of the field theory
+    for(int i = 0; i < dim; i++) {
+        outf << spacing[i] << " " ;
     }
-    cout << "\n";
-    //third output the fields (this will determine autmatically if dynamic and need to output the time derivative also)
+    outf << "\n";
+    //third output the parameters of the field theory
+    for(int i = 0; i < parameters.size(); i++) {
+        outf << *parameters[i] << " " ;
+    }
+    outf << "\n";
+    outf << "field_start:\n";
+    //fourth output the fields (this will determine autmatically if dynamic and need to output the time derivative also)
     fields.save_fields(outf, getTotalSize());
     //close the file
     outf.close();
-    cout << "Saving complete!\n";
 }
 
 
-void BaseFieldTheory::load(const char * loadpath){
+void BaseFieldTheory::load(const char * loadpath, bool message){
+    if(message){
     cout << "loading from file " << loadpath << "\n";
+    }
     ifstream infile(loadpath);
     //first load the derived class name to ensure loading the correct theory type!
     //first load dimensions of the field theory!
     for(int i = 0; i < dim; i++){
         infile >> size[i];
     }
+    if(message) {
+        cout << "dim: ";
+        for (int i = 0; i < dim; i++) {
+            cout << size[i];
+            if (i < dim - 1) { cout << "x"; }
+        }
+        cout << "\n";
+    }
     // and resize the theory to the loaded dimensions
         fields.resize(size);
-    //second load the parameters of the field theory
+        energydensity.resize(getTotalSize());
+        chargedensity.resize(getTotalSize());
+    //second load the spacing of the field theory
+    for(int i = 0; i < dim; i++){
+        infile >> spacing[i];
+    }
+    if(message) {
+        cout << "spacing: ";
+        for (int i = 0; i < dim; i++) {
+            cout << spacing[i];
+            if (i < dim - 1) { cout << "x"; }
+        }
+        cout << "\n";
+    }
+    //third load the parameters of the field theory
     for(int i = 0; i < parameters.size(); i++){
         infile >> *parameters[i];
     }
-    //third load the fields (this will determine autmatically if dynamic and need to output the time derivative also)
-    fields.load_fields(infile, getTotalSize());
-    //close the file
+    if(message) {
+        printParameters();
+    }
+    string check;
+    infile >> check;
+    if(check == "field_start:") {
+        //fourth load the fields (this will determine autmatically if dynamic and need to output the time derivative also)
+        fields.load_fields(infile, getTotalSize());
+        //close the file
+        if(message) {
+            cout << "loading completed succesfully!\n";
+        }
+    }else {cout << "ERROR! incorrect number of parameters in file, have you loaded a matching field theory or altered the class since saving!?\n";cout << "exiting load function!\n";}
     infile.close();
-    cout << "loading completed!\n";
 }
 
 void BaseFieldTheory::plotEnergy() {

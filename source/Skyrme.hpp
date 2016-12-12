@@ -29,6 +29,7 @@ namespace FTPL {
         CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) calculateGradientFlow(int pos) final;
         CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int pos) final;
         CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) calculateEnergy(int pos); // RETURN TO FINAL OR CHECK TO SEE IF THIS AFFECTS SPEED!!! FOR INLINE IT REALLY SHOUDLNT BUT CHECK!!!!!!
+        CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) calculateCharge(int pos);
         CUDA_HOSTDEV inline virtual __attribute__((always_inline)) vector<double> calculateDynamicEnergy(int pos) final;
         CUDA_HOSTDEV inline __attribute__((always_inline)) double levi(int i, int j, int k, int l);
         //Other Useful functions
@@ -39,22 +40,16 @@ namespace FTPL {
         CUDA_HOSTDEV SkyrmeModel(int width, int height, int depth, bool isDynamic = false);
         CUDA_HOSTDEV ~SkyrmeModel(){};
         CUDA_HOSTDEV void setParameters(double Fpi_in, double epi_in, double mpi);
-        CUDA_HOSTDEV double calculateCharge(int pos);
-        CUDA_HOSTDEV double getCharge(){return charge;};
-        CUDA_HOSTDEV void updateCharge();
     private:
         // parameters
-        double Fpi, epi, mpi;
-        double charge;
-        vector<double> chargedensity;
+        double Fpi = sqrt(8.0);
+        double epi = sqrt(0.5);
+        double mpi = 0.0;
     };
 
     double SkyrmeModel::levi(int i, int j, int k, int l){
-        int levi(int i, int j, int k, int l)
-        {
-            if((i==j)||(i==k)||(i==l)||(j==k)||(j==l)||(k==l)) return 0;
-            else return ( (i-j)*(i-k)*(i-l)*(j-k)*(j-l)*(k-l)/12 );
-        }
+        if((i==j)||(i==k)||(i==l)||(j==k)||(j==l)||(k==l)) return 0;
+        else return ( (i-j)*(i-k)*(i-l)*(j-k)*(j-l)*(k-l)/12 );
     }
 
     inline void SkyrmeModel::RK4calc(int pos){
@@ -142,7 +137,9 @@ namespace FTPL {
         Eigen::Vector4d maximum(0.05,0.05,0.05,0.05);
         f->min = minimum;
         f->max = maximum;
-        chargedensity.resize(getTotalSize());
+        addParameter(&Fpi, "Fpi"); // need to add any parameters that you want to be saved/loaded when using the .save/.load function (always add them in the same order!)
+        addParameter(&epi, "epi");
+        addParameter(&mpi, "mpi");
     };
 
 
@@ -153,15 +150,16 @@ namespace FTPL {
         Eigen::Vector4d maximum(0.01,0.01,0.01,0.01);
         f->min = minimum;
         f->max = maximum;
+        addParameter(&Fpi, "Fpi"); // need to add any parameters that you want to be saved/loaded when using the .save/.load function (always add them in the same order!)
+        addParameter(&epi, "epi");
+        addParameter(&mpi, "mpi");
         load(filename);
-        chargedensity.resize(getTotalSize());
     };
 
      double SkyrmeModel::calculateEnergy(int pos){
         Eigen::Vector4d fx = single_derivative(f, 0, pos);
         Eigen::Vector4d fy = single_derivative(f, 1, pos);
         Eigen::Vector4d fz = single_derivative(f, 2, pos);
-
         return ((1.0)/(12.0*M_PI*M_PI))*((Fpi*Fpi/8.0)*(fx.squaredNorm()+fy.squaredNorm()+fz.squaredNorm())
                + (1.0/(2.0*epi*epi))*(fx.squaredNorm()*(fy.squaredNorm()+fz.squaredNorm()) + fy.squaredNorm()*fz.squaredNorm()
                - fx.dot(fy)*fx.dot(fy) - fx.dot(fz)*fx.dot(fz) - fy.dot(fz)*fy.dot(fz) ) + mpi*mpi*(1.0 - f->data[pos][0]));
@@ -185,21 +183,18 @@ namespace FTPL {
         Eigen::Vector4d fx = single_derivative(f, 0, pos);
         Eigen::Vector4d fy = single_derivative(f, 1, pos);
         Eigen::Vector4d fz = single_derivative(f, 2, pos);
-        return 0.2;//(1.0/(2.0*M_PI*M_PI))*( levicivita*df*df*df*f(f->data[pos]).dot(fx));
-    };
-
-    void SkyrmeModel::updateCharge(){
-        double sum = 0.0;
-#pragma omp parallel for reduction(+:sum)
-        for(int i = 0; i < getTotalSize(); i++) {
-            if (inBoundary(i)) {
-                double buffer = calculateCharge(i);
-                chargedensity[i] = buffer;
-                sum += buffer;
+        double local_charge = 0.0;
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                for(int k = 0; k < 4; k++){
+                    for(int l = 0; l < 4; l++){
+                        local_charge += levi(i+1,j+1,k+1,l+1)*fx[i]*fy[j]*fz[k]*f->data[pos][l];
+                    }
+                }
             }
-        }
-        charge = sum*spacing[0]*spacing[1];
 
+        }
+        return (1.0/(2.0*M_PI*M_PI))*local_charge;
     };
 
     inline void SkyrmeModel::calculateGradientFlow(int pos){
@@ -236,17 +231,17 @@ namespace FTPL {
         double xmax = size[0]*spacing[0]/2.0;
         double ymax = size[1]*spacing[1]/2.0;
         double zmax = size[2]*spacing[2]/2.0;
-        for(int i = bdw[0]; i < size[0]-bdw[1]; i++){
-            for(int j = bdw[2]; j < size[1]-bdw[3]; j++){
-                for(int k = bdw[4]; k < size[2]-bdw[5]; k++){
-                double x = i*spacing[0]-xmax;
-                double y = j*spacing[1]-ymax;
-                double z = k*spacing[2]-zmax;
+        for(int i = 0; i < getTotalSize(); i++){
+            if(inBoundary(i)){
+                vector<int> pos = convert(i);
+                double x = pos[0]*spacing[0]-xmax;
+                double y = pos[1]*spacing[1]-ymax;
+                double z = pos[2]*spacing[2]-zmax;
                 double r = sqrt((x-x_in)*(x-x_in) + (y-y_in)*(y-y_in) + (z-z_in)*(z-z_in));
                     if(r<0.000001)
                     {
                         Eigen::Vector4d value(-1.0,0.0,0.0,0.0);
-                        f->setData(value, {i,j,k});
+                        f->data[i] = value;
                     }else {
                         double theta = atan2(y_in - y, x_in - x) - phi;
                         double thi = acos((z - z_in) / r);
@@ -259,15 +254,15 @@ namespace FTPL {
                         double res2 = sin(initial(r)) * constant * 2.0 * rational[1];
                         double res3 = sin(initial(r)) * constant * (1.0 - mod * mod);
                         Eigen::Vector4d value(res0, res1, res2, res3);
-                        f->setData(value, {i, j, k});
+                        f->data[i] = value;
                     }
-            }}}
+            }}
     }
 
     double SkyrmeModel::initial(double r)
     {
         double a;
-        double initialradius = 1.6;
+        double initialradius = 2.0;
         if(r > initialradius)
         {
             a = 0;

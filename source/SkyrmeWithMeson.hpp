@@ -91,6 +91,9 @@ namespace FTPL {
         mesons[0][2]->min = minimum;
         mesons[0][2]->max = maximum;
         Eigen::Vector3d zero(0,0,0);
+        mesons[0][0]->fill(zero);
+        mesons[0][1]->fill(zero);
+        mesons[0][2]->fill(zero);
     }
 
     double SkyrmeModelwithMeson::calculateEnergy(int pos){
@@ -98,9 +101,23 @@ namespace FTPL {
         Eigen::Vector4d fy = single_derivative(f, 1, pos);
         Eigen::Vector4d fz = single_derivative(f, 2, pos);
 
+        double B = 0.0;
+
+        for(int i = 0; i < 4; i++){
+            for(int j = 0; j < 4; j++){
+                for(int k = 0; k < 4; k++){
+                    for(int l = 0; l < 4; l++){
+                        B += levi(i+1,j+1,k+1,l+1)*fx[i]*fy[j]*fz[k]*f->data[pos][l];
+                    }
+                }
+            }
+        }
+
         double energy = c1*(fx.squaredNorm()+fy.squaredNorm()+fz.squaredNorm())
              + c2*(fx.squaredNorm()*(fy.squaredNorm()+fz.squaredNorm()) + fy.squaredNorm()*fz.squaredNorm()
              - fx.dot(fy)*fx.dot(fy) - fx.dot(fz)*fx.dot(fz) - fy.dot(fz)*fy.dot(fz) ) + mpi*mpi*(1.0 - f->data[pos][0]);
+
+        energy -= 1.0*B;
 
         if(withVector){
 
