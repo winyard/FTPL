@@ -132,7 +132,7 @@ namespace FTPL {
     SkyrmeModel::SkyrmeModel(int width, int height, int depth, bool isDynamic): BaseFieldTheory(3, {width,height,depth}, isDynamic) {
         //vector<int> sizein = {width, height};
         //BaseFieldTheory(2,sizein);
-        f = createField(f, isDynamic);
+        f = createField(f, isDynamic, true);
         Eigen::Vector4d minimum(-0.05,-0.05,-0.05,-0.05);
         Eigen::Vector4d maximum(0.05,0.05,0.05,0.05);
         f->min = minimum;
@@ -145,7 +145,7 @@ namespace FTPL {
 
     SkyrmeModel::SkyrmeModel(const char * filename, bool isDynamic): BaseFieldTheory(3, {10,10,10}, isDynamic){
         // mearly place holders so the fields can be initialised
-        f = createField(f, isDynamic);
+        f = createField(f, isDynamic, true);
         Eigen::Vector4d minimum(-0.01,-0.01,-0.01,-0.01);
         Eigen::Vector4d maximum(0.01,0.01,0.01,0.01);
         f->min = minimum;

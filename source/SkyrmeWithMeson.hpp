@@ -41,8 +41,8 @@ namespace FTPL {
     };
 
     double SkyrmeModelwithMeson::vectorprofile(double r){
-        if(r<0.5){return r;}
-        else if(r<1.0){return 1.0-r;}
+        if(r<0.5){return 0.1*r;}
+        else if(r<1.0){return 0.1*(1.0-r);}
         else {return 0.0;}
     }
 
@@ -79,9 +79,9 @@ namespace FTPL {
         withVector = true;
         mesons.resize(1);
         mesons[0].resize(3);
-        mesons[0][0] = createField(mesons[0][0], false);
-        mesons[0][1] = createField(mesons[0][1], false);
-        mesons[0][2] = createField(mesons[0][2], false);
+        mesons[0][0] = createField(mesons[0][0], false, false);
+        mesons[0][1] = createField(mesons[0][1], false, false);
+        mesons[0][2] = createField(mesons[0][2], false, false);
         Eigen::Vector3d minimum(-0.01,-0.01,-0.01);
         Eigen::Vector3d maximum(0.01,0.01,0.01);
         mesons[0][0]->min = minimum;
@@ -164,11 +164,12 @@ namespace FTPL {
             for(int j = 0; j < 3; j++){
             if(i != j){
                 energy += 16.0*c5*( (H[i].cross(V[j])).squaredNorm() - (H[i].cross(V[j])).dot(H[j].cross(V[i])) ); // 1st term (simplify, with other terms)
-                energy += 2.0*H[i].cross(H[j]).dot( dV[i][j] - dV[j][i] );//2nd term
-                energy += 8.0*c7*H[i].cross(H[j]).dot(V[i].cross(V[j]));//3rd term
-                energy += 4.0*c6*H[i].cross(H[j]).dot( H[i].cross(V[j]) - H[j].cross(V[j]) );//4th term
-                energy += H[i].cross(V[j]).dot( dV[i][j] - dV[j][i] );//5th term
-                energy -= 4.0*c3*V[i].cross(V[j]).dot( H[i].cross(V[j]) - H[j].cross(V[i]) );//6th term
+                energy += 4.0*c6*(H[i].cross(H[j])).dot(dV[i][j] - dV[j][i]);//2nd term
+                //energy += 2.0*H[i].cross(H[j]).dot( dV[i][j] - dV[j][i] );//2nd term // ncorrect?
+                energy -= 8.0*c7*(H[i].cross(H[j])).dot(V[i].cross(V[j]));//3rd term
+                energy += 4.0*c6*(H[i].cross(H[j])).dot( H[i].cross(V[j]) - H[j].cross(V[i]) );//4th term
+                energy += (H[i].cross(V[j])).dot( dV[i][j] - dV[j][i] );//5th term
+                energy -= 4.0*c3*(V[i].cross(V[j])).dot( H[i].cross(V[j]) - H[j].cross(V[i]) );//6th term
             }
             }}
         }

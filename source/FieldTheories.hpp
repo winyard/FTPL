@@ -72,7 +72,7 @@ class Field {
 	    int dim;
         CUDA_HOSTDEV inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
         CUDA_HOSTDEV inline void  __attribute__((always_inline)) setBuffer(const T value, vector<int> &pos);
-        CUDA_HOSTDEV Field(int d, vector<int> size, bool isdynamic);
+        CUDA_HOSTDEV Field(int d, vector<int> size, bool isdynamic, bool isnormalised);
         CUDA_HOSTDEV ~Field(){};
         CUDA_HOSTDEV inline T operator()(...); // TO BE WRITTEN
         CUDA_HOSTDEV inline const vector<T> getData();
@@ -94,6 +94,7 @@ class Field {
         CUDA_HOSTDEV void progressTime(double time_step);
         CUDA_HOSTDEV void update_derivatives(vector<double> spacing);
         CUDA_HOSTDEV void alter_point(int i, T value, vector<double> spacing);
+        bool normalised;
     protected:
 		vector<int>  size;
         vector<vector<T>> k_sum;
@@ -146,7 +147,7 @@ template<class T>
 /* --- Constructors & Destructors --- */
 
 template <class T>
-Field<T>::Field(int d, vector<int> sizein, bool isdynamic): dim(d), size(sizein), dynamic(isdynamic)  {
+Field<T>::Field(int d, vector<int> sizein, bool isdynamic, bool isnormalised): dim(d), size(sizein), dynamic(isdynamic), normalised(isnormalised)  {
     data.resize(getTotalSize());
     buffer.resize(getTotalSize());
     if(dynamic){
@@ -284,12 +285,14 @@ void Field<T>::save_field(ofstream& output){ // may need to be altered for vario
 
 template <class T>
 void Field<T>::normalise(){
-	for(int i=0; i < getTotalSize(); i++){
-		data[i].normalize();
-	}
-    if(dynamic){
-        for(int i=0; i < getTotalSize(); i++){
-            dt[i] = dt[i] - (data[i].dot(dt[i]))*data[i];
+    if(normalised) {
+        for (int i = 0; i < getTotalSize(); i++) {
+            data[i].normalize();
+        }
+        if (dynamic) {
+            for (int i = 0; i < getTotalSize(); i++) {
+                dt[i] = dt[i] - (data[i].dot(dt[i])) * data[i];
+            }
         }
     }
 }
@@ -372,10 +375,10 @@ class TargetSpace {
     public:
         CUDA_HOSTDEV TargetSpace();
         CUDA_HOSTDEV ~TargetSpace(){};
-        CUDA_HOSTDEV Field<Eigen::VectorXd> * addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic);
-        CUDA_HOSTDEV Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic);
-        CUDA_HOSTDEV Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic);
-        CUDA_HOSTDEV Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic);
+        CUDA_HOSTDEV Field<Eigen::VectorXd> * addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic, bool isNormalised);
+        CUDA_HOSTDEV Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic, bool isNormalised);
+        CUDA_HOSTDEV Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic, bool isNormalised);
+        CUDA_HOSTDEV Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic, bool isNormalised);
         CUDA_HOSTDEV void resize(vector<int> sizein);
         CUDA_HOSTDEV void load_fields(ifstream& loadfile, int totalSize);
         CUDA_HOSTDEV void save_fields(ofstream& savefile, int totalSize);
@@ -387,7 +390,7 @@ class TargetSpace {
         CUDA_HOSTDEV void cutKinetic(int pos);
         CUDA_HOSTDEV int no_fields;
         CUDA_HOSTDEV void storeDerivatives(BaseFieldTheory * theory);
-        CUDA_HOSTDEV void randomise(int i, int field, vector<double> spacing, double dt, bool normalise);
+        CUDA_HOSTDEV void randomise(int i, int field, vector<double> spacing, double dt);
         CUDA_HOSTDEV void derandomise(int i, int field, vector<double> spacing);
         CUDA_HOSTDEV void resetPointers();
     private:
@@ -414,7 +417,7 @@ class TargetSpace {
         CUDA_HOSTDEV inline virtual double calculateCharge(int pos);
         CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int i);
         CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
-        CUDA_HOSTDEV void RK4(int iterations, bool normalise, bool cutEnergy, int often); // TO BE WRITTEN
+        CUDA_HOSTDEV void RK4(int iterations, bool cutEnergy, int often); // TO BE WRITTEN
         CUDA_HOSTDEV void save(const char * savepath); // TO BE WRITTEN
         CUDA_HOSTDEV void load(const char * loadpath, bool message = true); // TO BE WRITTEN
         CUDA_HOSTDEV void plot(const char * plotpath); // TO BE WRITTEN
@@ -425,7 +428,7 @@ class TargetSpace {
         CUDA_HOSTDEV void setStandardMetric(string type);
         CUDA_HOSTDEV void updateEnergy(); // TO BE WRITTEN
         CUDA_HOSTDEV void updateCharge();
-        CUDA_HOSTDEV void gradientFlow(int iterations, int often, bool normalise); // TO BE WRITTEN
+        CUDA_HOSTDEV void gradientFlow(int iterations, int often); // TO BE WRITTEN
         CUDA_HOSTDEV void setTimeInterval(double dt_in);
         CUDA_HOSTDEV double getEnergy(){return energy;};
         CUDA_HOSTDEV inline bool inBoundary(vector<int> pos);
@@ -439,7 +442,7 @@ class TargetSpace {
         CUDA_HOSTDEV void plotEnergy();
         CUDA_HOSTDEV void printParameters();
         CUDA_HOSTDEV void setMetricType(string type);
-        CUDA_HOSTDEV void annealing(int iterations, int often, int often_cut, bool normalise = false);
+        CUDA_HOSTDEV void annealing(int iterations, int often, int often_cut);
         template <class T>
         CUDA_HOSTDEV inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
@@ -450,7 +453,7 @@ class TargetSpace {
     protected:
         int metric_type = 0;
         template <class T>
-        CUDA_HOSTDEV Field<T> * createField(Field<T> * target, bool isDynamic);
+        CUDA_HOSTDEV Field<T> * createField(Field<T> * target, bool isDynamic, bool isNormalised = false);
         //vector<unique_ptr<Field>> fields;
         TargetSpace fields;
         vector<int> bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
@@ -476,7 +479,7 @@ class TargetSpace {
         cout << "\n";
     }
 
-    void TargetSpace::randomise(int i, int field, vector<double> spacing, double dt, bool normalise){
+    void TargetSpace::randomise(int i, int field, vector<double> spacing, double dt){
         std::random_device rd;
         std::mt19937 mt(rd());
         if(field <= fields1.size()-1){
@@ -485,7 +488,7 @@ class TargetSpace {
             for(int j = 0; j < value.size(); j++){
                 value[j] = fields1[field]->data[i][j] + dist(mt);
             }
-            if(normalise){
+            if(fields1[field]->normalised){
                 value.normalize();
             }
             fields1[field]->alter_point(i,value,spacing);
@@ -507,7 +510,7 @@ class TargetSpace {
                     std::uniform_real_distribution<double> dist(fields4[field - fields1.size() - fields2.size()  - fields3.size()]->min(j,k), fields4[field - fields1.size() - fields2.size()  - fields3.size()]->max(j,k));
                     value(j,k) = dist(mt);
             }}
-            if(normalise){
+            if(fields4[field - fields1.size() - fields2.size()  - fields3.size()]->normalised){
                 value.normalize();
             }
             fields4[field - fields1.size() - fields2.size()  - fields3.size()]->alter_point(i,value,spacing);
@@ -675,6 +678,8 @@ void TargetSpace::normalise(){
         fields1[i]->normalise();
     }
     for(int i = 0; i < fields4.size(); i++){
+        cout << "WARNING!!!!! currently normalisation is not correct for matricies, please correct this where this cout statement is in FieldTheories.hpp\n";
+        cout << "It appears to be working for the annealong function or maybe a mistake was made???? - I would start by comparing the two function anyway :) - good luck future tom! \n"
         fields1[i]->normalise();
     }
 }
@@ -699,29 +704,31 @@ void TargetSpace::resize(vector<int> sizein){
     resetPointers();
 }
 
-Field<Eigen::VectorXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic) {
-    fields1.push_back(new Field < Eigen::VectorXd > (dim, size, isDynamic));
+Field<Eigen::VectorXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::VectorXd> * target, bool isDynamic, bool isNormalised) {
+    fields1.push_back(new Field < Eigen::VectorXd > (dim, size, isDynamic,isNormalised));
     fields1_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields1[fields1.size() - 1];
 }
 
-Field<double> * TargetSpace::addField(int dim, vector<int> size, Field<double> * target, bool isDynamic) {
-    fields2.push_back(new Field < double > (dim, size, isDynamic));
+Field<double> * TargetSpace::addField(int dim, vector<int> size, Field<double> * target, bool isDynamic, bool isNormalised) {
+    if(isNormalised){cout << "Warning! isNormalised is set true for double field, this makes no sense so setting to false!\n";}
+    fields2.push_back(new Field < double > (dim, size, isDynamic,false));
     fields2_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields2[fields2.size() - 1];
 }
 
-Field<int> * TargetSpace::addField(int dim, vector<int> size, Field<int> * target, bool isDynamic) {
-    fields3.push_back(new Field < int > (dim, size, isDynamic));
+Field<int> * TargetSpace::addField(int dim, vector<int> size, Field<int> * target, bool isDynamic, bool isNormalised) {
+    if(isNormalised){cout << "Warning! isNormalised is set true for int field, this makes no sense so setting to false!\n";}
+    fields3.push_back(new Field < int > (dim, size, isDynamic,false));
     fields3_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields3[fields3.size() - 1];
 }
 
-Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic) {
-    fields4.push_back(new Field < Eigen::MatrixXd > (dim, size, isDynamic));
+Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic, bool isNormalised) {
+    fields4.push_back(new Field < Eigen::MatrixXd > (dim, size, isDynamic,isNormalised));
     fields4_pointers.push_back(&target);
     no_fields = no_fields + 1;
     return fields4[fields4.size() - 1];
@@ -893,7 +900,7 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
         parameterNames.push_back(name);
     }
 
-void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool normalise){
+void BaseFieldTheory::annealing(int iterations, int often, int often_cut){
     if(dynamic){
         cout << "Warning! You have run annealing on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
@@ -926,7 +933,7 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool n
                 pos = p_rand(mt);// correct to right random no. generator
             }
             int field = f_rand(mt); // correct for int random no. generator
-            fields.randomise(pos, field, spacing, dt, normalise);
+            fields.randomise(pos, field, spacing, dt);
             newEnergy = calculateEnergy(pos);
             oldEnergy = energydensity[pos];
             int store = 0;
@@ -1069,7 +1076,7 @@ inline vector<double> calculateDynamicEnergy(int pos){
 }
 
 
-    void BaseFieldTheory::RK4(int iterations, bool normalise, bool cutEnergy, int often){
+    void BaseFieldTheory::RK4(int iterations, bool cutEnergy, int often){
         double time = 0.0;
         double newenergy = 0.0;
         double sum;
@@ -1095,9 +1102,7 @@ inline vector<double> calculateDynamicEnergy(int pos){
             }
             #pragma omp master
             {
-                if (normalise) {
                     fields.normalise();
-                }
             }
             if(cutEnergy){
                 sum = 0.0;
@@ -1185,9 +1190,9 @@ BaseFieldTheory::BaseFieldTheory(int d, vector<int> sizein, bool isDynamic): dim
 };
 
 template <class T>
-Field<T> * BaseFieldTheory::createField(Field<T> * target, bool isDynamic){
+Field<T> * BaseFieldTheory::createField(Field<T> * target, bool isDynamic, bool isNormalised){
     dynamic = isDynamic;
-    return fields.addField(dim, size, target, isDynamic);
+    return fields.addField(dim, size, target, isDynamic, isNormalised);
 };
 
 int BaseFieldTheory::getTotalSize(){
@@ -1367,7 +1372,7 @@ inline void BaseFieldTheory::RK4calc(int i){
 }
 
 
-    void BaseFieldTheory::gradientFlow(int iterations, int often, bool normalise){
+    void BaseFieldTheory::gradientFlow(int iterations, int often){
     if(dynamic){
         cout << "Warning! You have run gradient flow on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
@@ -1386,7 +1391,7 @@ inline void BaseFieldTheory::RK4calc(int i){
         #pragma omp master
         {
             fields.update_gradients(dt);
-            if(normalise){fields.normalise();}
+            fields.normalise();
             no += 1;
             sum = 0.0;
         }

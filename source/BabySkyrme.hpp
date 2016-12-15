@@ -99,7 +99,7 @@ void BabySkyrmeModel::setParameters(double mu_in, double mpi_in){
 BabySkyrmeModel::BabySkyrmeModel(int width, int height, bool isDynamic): BaseFieldTheory(2, {width,height}, isDynamic) {
 	//vector<int> sizein = {width, height};
 	//BaseFieldTheory(2,sizein);
-	f = createField(f, isDynamic);
+	f = createField(f, isDynamic, true);
     Eigen::Vector3d minimum(-0.01,-0.01,-0.01);
     Eigen::Vector3d maximum(0.01,0.01,0.01);
     f->min = minimum;
@@ -111,7 +111,7 @@ BabySkyrmeModel::BabySkyrmeModel(int width, int height, bool isDynamic): BaseFie
 
 BabySkyrmeModel::BabySkyrmeModel(const char * filename, bool isDynamic): BaseFieldTheory(2, {2,2}, isDynamic){
     // mearly place holders so the fields can be initialised
-	f = createField(f, isDynamic);
+	f = createField(f, isDynamic, true);
     addParameter(&mu, "mu");
     addParameter(&mpi, "mpi");
     load(filename);
