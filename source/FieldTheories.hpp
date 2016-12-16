@@ -29,6 +29,7 @@
 #include <stdarg.h>
 #include <chrono>
 #include <random>
+#include <mpi.h>
 #include "../source_plot/plots.hpp"
 
 class Timer
@@ -379,6 +380,7 @@ class TargetSpace {
         CUDA_HOSTDEV Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic, bool isNormalised);
         CUDA_HOSTDEV Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic, bool isNormalised);
         CUDA_HOSTDEV Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic, bool isNormalised);
+        CUDA_HOSTDEV void MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send);
         CUDA_HOSTDEV void resize(vector<int> sizein);
         CUDA_HOSTDEV void load_fields(ifstream& loadfile, int totalSize);
         CUDA_HOSTDEV void save_fields(ofstream& savefile, int totalSize);
@@ -417,6 +419,7 @@ class TargetSpace {
         CUDA_HOSTDEV inline virtual double calculateCharge(int pos);
         CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int i);
         CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
+        CUDA_HOSTDEV inline void MPICommEnergy(int partner,int pos,vector<int> domain,int tag,bool send);
         CUDA_HOSTDEV void RK4(int iterations, bool cutEnergy, int often); // TO BE WRITTEN
         CUDA_HOSTDEV void save(const char * savepath); // TO BE WRITTEN
         CUDA_HOSTDEV void load(const char * loadpath, bool message = true); // TO BE WRITTEN
@@ -442,7 +445,7 @@ class TargetSpace {
         CUDA_HOSTDEV void plotEnergy();
         CUDA_HOSTDEV void printParameters();
         CUDA_HOSTDEV void setMetricType(string type);
-        CUDA_HOSTDEV void annealing(int iterations, int often, int often_cut);
+        CUDA_HOSTDEV void annealing(int iterations, int often, int often_cut, bool output = true);
         template <class T>
         CUDA_HOSTDEV inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
@@ -450,6 +453,9 @@ class TargetSpace {
         template <class T>
         CUDA_HOSTDEV inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
         CUDA_HOSTDEV double getCharge(){return charge;};
+        CUDA_HOSTDEV void MPIFunction(void (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize = {});
+        CUDA_HOSTDEV void MPIAnnealing(int iterations, int localIterations, int localPoints, int often, int often_cut);
+        CUDA_HOSTDEV inline void addOne(vector<int>& pos, vector<int> limits, int component = 0);
     protected:
         int metric_type = 0;
         template <class T>
@@ -471,6 +477,320 @@ class TargetSpace {
         vector<double *> parameters;
         vector<string> parameterNames;
     };
+
+    void BaseFieldTheory::MPIAnnealing(int iterations, int localIterations, int localPoints, int often, int often_cut) {
+        vector<int> domainSize;
+        for(int i = 0; i < dim; i++){
+            domainSize.push_back(4+localPoints);
+        }
+        //resize the data to the recieved sizes
+        if(MPI::COMM_WORLD.Get_rank()!=0){
+            if(domainSize.size() != dim){cout << "ERROR!! you have supplied a domainSize with the incorrect dimension into MPIFunction!\n";}
+            fields.resize(domainSize);
+            size = domainSize;
+        }
+        fields.storeDerivatives(this);
+        setDerivatives = true;
+        omp_set_num_threads(1);
+        double oldEnergy = energy;
+        int check = 0;
+        for(int no = 0; no < iterations; no++) {
+            MPIFunction(&BaseFieldTheory::annealing, dim, often, localIterations, domainSize);
+            //sum up the energydensity
+            if(MPI::COMM_WORLD.Get_rank()==0) {
+                updateEnergy();
+                updateCharge();
+                cout << no << "(" << (int) 100*no/iterations<<"%) energy = " << energy << " dt = " << dt << " charge = " << charge << "\n";
+                if (oldEnergy == energy) { check++; }
+                else {
+                    oldEnergy = energy;
+                    check = 0;
+                }
+                if (check == often_cut) {
+                    check = 0;
+                    dt *= 0.9;
+                }
+            }
+            MPI_Bcast(&dt,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
+        }
+    }
+
+    void BaseFieldTheory::addOne(vector<int>& pos, vector<int> limits, int component){
+        if(pos[component] == limits[component]){
+            pos[component] = 0;
+            addOne(pos, limits, component + 1);
+        }else {
+            pos[component] += 1;
+        }
+    }
+
+    void BaseFieldTheory::MPICommEnergy(int partner,int pos,vector<int> domain,int tag,bool send){
+        for(int i = 0; i < domain.size(); i++) {
+            if(send) {
+                MPI_Send(&energydensity[pos+domain[i]],1,MPI_DOUBLE,partner,tag,MPI_COMM_WORLD);
+            }else{
+                MPI_Recv(&energydensity[pos+domain[i]],1,MPI_DOUBLE,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+            }
+        }
+    }
+
+    void TargetSpace::MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send){
+        for(int no = 0; no < fields1.size(); no++){
+            for(int i = 0; i < dataDomain.size(); i++) {
+                if (send) {
+                    MPI_Send(fields1[no]->data[point + dataDomain[i]].data(),
+                             fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag, MPI_COMM_WORLD);
+                } else {
+                    MPI_Recv(fields1[no]->data[point + dataDomain[i]].data(),
+                             fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                }
+            }
+            for(int i = 0; i < derivativeDomain.size(); i++) {
+                if(send) {
+                    for(int wrt1 = 0; wrt1 < fields1[no]->dim; wrt1++) {
+                        MPI_Send(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                 fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
+                                 MPI_COMM_WORLD);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Send(fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                     fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD);
+                        }
+                    }
+                }else{
+                    for(int wrt1 = 0; wrt1 < fields1[no]->dim; wrt1++) {
+                        MPI_Recv(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                 fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
+                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Recv(fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                     fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        }
+                    }
+                }
+            }
+        }
+
+        for(int no = 0; no < fields2.size(); no++){
+            for(int i = 0; i < dataDomain.size(); i++) {
+                if(send) {
+                    MPI_Send(&fields2[no]->data[point + dataDomain[i]],
+                             1, MPI_DOUBLE,partner,tag,MPI_COMM_WORLD);
+                }else{
+                    MPI_Recv(&fields2[no]->data[point + dataDomain[i]],
+                             1, MPI_DOUBLE,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                }
+            }
+            for(int i = 0; i < derivativeDomain.size(); i++) {
+                if(send) {
+                    for(int wrt1 = 0; wrt1 < fields2[no]->dim; wrt1++) {
+                        MPI_Send(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                 1, MPI_DOUBLE, partner, tag,
+                                 MPI_COMM_WORLD);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Send(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                     1, MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD);
+                        }
+                    }
+                }else{
+                    for(int wrt1 = 0; wrt1 < fields2[no]->dim; wrt1++) {
+                        MPI_Recv(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                 1, MPI_DOUBLE, partner, tag,
+                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Recv(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                     1, MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        }
+                    }
+                }
+            }
+        }
+        for(int no = 0; no < fields3.size(); no++){
+            for(int i = 0; i < dataDomain.size(); i++) {
+                if(send) {
+                    MPI_Send(&fields3[no]->data[point + dataDomain[i]],
+                             1, MPI_INT,partner,tag,MPI_COMM_WORLD);
+                }else{
+                    MPI_Recv(&fields3[no]->data[point + dataDomain[i]],
+                             1, MPI_INT,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                }
+            }
+            for(int i = 0; i < derivativeDomain.size(); i++) {
+                if(send) {
+                    for(int wrt1 = 0; wrt1 < fields3[no]->dim; wrt1++) {
+                        MPI_Send(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                 1, MPI_INT, partner, tag,
+                                 MPI_COMM_WORLD);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Send(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                     1, MPI_INT, partner, tag,
+                                     MPI_COMM_WORLD);
+                        }
+                    }
+                }else{
+                    for(int wrt1 = 0; wrt1 < fields3[no]->dim; wrt1++) {
+                        MPI_Recv(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                 1, MPI_INT, partner, tag,
+                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Recv(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                     1, MPI_INT, partner, tag,
+                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        }
+                    }
+                }
+            }
+        }
+        for(int no = 0; no < fields4.size(); no++){
+            for(int i = 0; i < dataDomain.size(); i++) {
+                if(send) {
+                    MPI_Send(fields4[no]->data[point + dataDomain[i]].data(),
+                             fields4[no]->data[point + dataDomain[i]].cols()*fields4[no]->data[point + dataDomain[i]].rows(), MPI_DOUBLE,partner,tag,MPI_COMM_WORLD);
+                }else{
+                    MPI_Recv(fields4[no]->data[point + dataDomain[i]].data(),
+                             fields4[no]->data[point + dataDomain[i]].cols()*fields4[no]->data[point + dataDomain[i]].rows(), MPI_DOUBLE,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                }
+            }
+            for(int i = 0; i < derivativeDomain.size(); i++) {
+                if(send) {
+                    for(int wrt1 = 0; wrt1 < fields4[no]->dim; wrt1++) {
+                        MPI_Send(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                 fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols()*fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows(), MPI_DOUBLE, partner, tag,
+                                 MPI_COMM_WORLD);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Send(fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                     fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].cols()*fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(), MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD);
+                        }
+                    }
+                }else{
+                    for(int wrt1 = 0; wrt1 < fields4[no]->dim; wrt1++) {
+                        MPI_Recv(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                 fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows()*fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols(), MPI_DOUBLE, partner, tag,
+                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                            MPI_Recv(fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                     fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].cols()*fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(), MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+
+    void BaseFieldTheory::MPIFunction(void (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize) {
+        int globalId = MPI::COMM_WORLD.Get_rank();
+        int totalNo = MPI::COMM_WORLD.Get_size();
+
+        if(domainSize.empty()){
+            //Split function equally across the grid
+            //calculate the grid splitting
+            int MPIdim[dim];
+            int wrapAround[dim];
+
+            int minimalSquare = (int)floor( exp((1.0/dimSplit)*log(totalNo-1)) );
+            int leftover = totalNo -pow(minimalSquare,dimSplit);
+            for(int i = 0; i < dim; i++) {
+                MPIdim[i] = minimalSquare;
+            }
+            MPIdim[0] += (int)floor( exp((1.0/(dimSplit-1))*log(leftover))    );
+            cout << "the selected topology is ";
+            for(int i = 0; i < dim; i++) {
+            if(i != 0){cout << "x";}
+                cout << MPIdim[i];
+            }
+            cout << "\n";
+            cout << "there are " << totalNo -pow(minimalSquare,dimSplit-1) - MPIdim[0] << " unused nodes out of a total of " << totalNo << " which is " << 100.0*(totalNo -pow(minimalSquare,dimSplit-1) - MPIdim[0])/ totalNo << "%\n";
+            if(totalNo -pow(minimalSquare,dimSplit-1) - MPIdim[0] != 0){cout << "would suggest exiting and rerunning code with correct number of nodes! - but hey, I'm not your mother\n";}
+            for(int i = 0; i < dim; i++) {
+                if (boundarytype[2*i] == 1){
+                    cout << "Warning Periodic boundary conditions have not been comprehensively tested for MPI\n";
+                    wrapAround[i] = 1;
+                }else{wrapAround[i] = 0;}
+            }
+
+            MPI_Comm grid;
+            //MPI_Cart_create();
+        }
+        else{
+            //create the transfer Domains for the fields and derived quantities (a vector containing all the values that are to be transfered between master and slave nodes)
+            vector<int> dataDomain;
+            vector<int> derivedDomain;
+            int totalSize = domainSize[0];
+            int corrector;
+            for(int i = 1; i < domainSize.size(); i++){
+                totalSize *= domainSize[i];
+            }
+            int point=0;
+            vector<int> pos(dim);
+            for(int j = 0; j < dim; j++){pos[j]=0;}
+            for(int i = 0; i < totalSize; i++){
+                    //porgress the pos value using the limiter of domain
+                    if(i > 0){
+                        addOne(pos,domainSize);
+                    }
+                    //calculate the corresponding 1-dim value (bear in mind the different limits!
+                    point = pos[0];
+                    int multiplier = 1;
+                    for(int i=1; i<dim; i++){
+                        multiplier *= size[i-1];
+                        point += pos[i]*multiplier;
+                    }
+                    //add the points to the corresponding vectors
+                    vector<int> temp_size = size;
+                    size = domainSize;
+                    if(inBoundary(pos)){
+                        dataDomain.push_back(point);
+                    }
+                    size = temp_size;
+                    derivedDomain.push_back(point);
+                    corrector = point;
+                }
+
+            if(globalId == 0){
+                std::random_device rd;
+                std::mt19937 mt(rd());
+                std::uniform_int_distribution<int> p_rand(0, getTotalSize()-corrector);
+                int points[totalNo];
+                int updated;
+                int pos;
+                for(int loop = 0; loop < loops; loop++){
+                    for(int no = 1; no < totalNo; no++){
+                        MPI_Recv(&updated,1,MPI_INT,no,loop,MPI_COMM_WORLD,MPI_STATUS_IGNORE);//recieve if the point has been updated
+                        if(updated==1){
+                            fields.MPICommDomain(no,points[no],dataDomain,derivedDomain,loop,false);
+                            MPICommEnergy(no,points[no],derivedDomain,loop,false);
+                        }
+                        pos = p_rand(mt);// correct to right random no. generator
+                        points[no] = pos;
+                        fields.MPICommDomain(no,pos,derivedDomain,derivedDomain,loop,true);
+                        MPICommEnergy(no,pos,derivedDomain,loop,true);
+                    }
+                }
+
+            }else{
+                int updated = 0;
+                for(int loop = 0; loop < loops; loop++){
+                    MPI_Send(&updated,1,MPI_INT,0,loop,MPI_COMM_WORLD);
+                    if(updated == 1){
+                            fields.MPICommDomain(0,0,dataDomain,derivedDomain,loop,true);
+                            MPICommEnergy(0,0,derivedDomain,loop,true);
+                    }
+                    fields.MPICommDomain(0,0,derivedDomain,derivedDomain,loop,false);
+                    MPICommEnergy(0,0,derivedDomain,loop,false);
+                    (this->*localFunction)(localIterations, 1, 1, false);
+                    updated = 1;
+                }
+            }
+        }
+
+
+    }
 
     void BaseFieldTheory::printParameters(){
         for(int i = 0; i < parameters.size(); i++){
@@ -557,6 +877,14 @@ class TargetSpace {
                                                                                                  wrt2, j);
                     }
                 }
+            }else{
+                for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
+                    fields1[i]->single_derivatives[wrt1][j] = Eigen::VectorXd::Zero(fields1[i]->data[0].size());
+                    for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
+                        fields1[i]->double_derivatives[wrt1][wrt2][j] = Eigen::VectorXd::Zero(
+                                fields1[i]->data[0].size());
+                    }
+                }
             }
             }
         }
@@ -578,7 +906,15 @@ class TargetSpace {
                         fields2[i]->double_derivatives[wrt1][wrt2][j]=theory->double_derivative(fields2[i],wrt1,wrt2,j);
                     }
                 }
-            }}
+            }else{
+                for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
+                    fields2[i]->single_derivatives[wrt1][j] = 0.0;
+                    for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
+                        fields2[i]->double_derivatives[wrt1][wrt2][j] = 0.0;
+                    }
+                }
+            }
+            }
         }
         for(int i = 0; i < fields3.size(); i++){
             fields3[i]->single_derivatives.resize(theory->dim);
@@ -598,7 +934,15 @@ class TargetSpace {
                         fields3[i]->double_derivatives[wrt1][wrt2][j]=theory->double_derivative(fields3[i],wrt1,wrt2,j);
                     }
                 }
-            }}
+            }else{
+                for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
+                    fields3[i]->single_derivatives[wrt1][j] = 0;
+                    for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
+                        fields3[i]->double_derivatives[wrt1][wrt2][j] = 0;
+                    }
+                }
+            }
+            }
         }
         for(int i = 0; i < fields4.size(); i++){
             fields4[i]->single_derivatives.resize(theory->dim);
@@ -618,7 +962,15 @@ class TargetSpace {
                         fields4[i]->double_derivatives[wrt1][wrt2][j]=theory->double_derivative(fields4[i],wrt1,wrt2,j);
                     }
                 }
-            }}
+            }else{
+                for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
+                    fields4[i]->single_derivatives[wrt1][j] = Eigen::MatrixXd::Zero(fields4[i]->data[0].rows(),fields4[i]->data[0].cols());
+                    for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
+                        fields4[i]->double_derivatives[wrt1][wrt2][j] = Eigen::MatrixXd::Zero(fields4[i]->data[0].rows(),fields4[i]->data[0].cols());
+                    }
+                }
+            }
+            }
         }
     }
 
@@ -679,7 +1031,7 @@ void TargetSpace::normalise(){
     }
     for(int i = 0; i < fields4.size(); i++){
         cout << "WARNING!!!!! currently normalisation is not correct for matricies, please correct this where this cout statement is in FieldTheories.hpp\n";
-        cout << "It appears to be working for the annealong function or maybe a mistake was made???? - I would start by comparing the two function anyway :) - good luck future tom! \n"
+        cout << "It appears to be working for the annealong function or maybe a mistake was made???? - I would start by comparing the two function anyway :) - good luck future tom! \n";
         fields1[i]->normalise();
     }
 }
@@ -900,20 +1252,21 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
         parameterNames.push_back(name);
     }
 
-void BaseFieldTheory::annealing(int iterations, int often, int often_cut){
-    if(dynamic){
+void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool output){
+    if(dynamic && output){
         cout << "Warning! You have run annealing on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
             fields.cutKinetic(i);
         }
     }
-    updateEnergy();
     double check_energy = -1.0;
     int cut_no = 0;
     int seperator = 2*getTotalSize()/size[dim-1];
-    fields.storeDerivatives(this);
-    setDerivatives = true;
-    updateEnergy();
+    if(!setDerivatives) {
+        fields.storeDerivatives(this);
+        setDerivatives = true;
+        updateEnergy();
+    }
     std::random_device rd;
     std::mt19937 mt(rd());
     std::uniform_int_distribution<int> f_rand(0, fields.no_fields-1);
@@ -990,8 +1343,9 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut){
                 }
             mult1 *= size[i];
             }
-            if (newEnergy > oldEnergy) { // add some heat term! :) - as well as some fall off
+            if (newEnergy > oldEnergy || newEnergy > -999999.0 || true) { // add some heat term! :) - as well as some fall off
                 fields.derandomise(pos, field, spacing);
+                updateEnergy();
             } else {
                 store = 0;
                 energydensity[pos] = newEnergyDensity[store];
@@ -1038,26 +1392,29 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut){
 
                 }
 
-            if (no % often == 0) {
+            if (no % often == 0 && no>0) {
                 #pragma omp barrier
                 #pragma omp master
                 {
                     no_total++;
-                    updateEnergy();
-                    updateCharge();
-                    cout << no_total << ": energy = " << energy <<  " : dt = " << dt << " charge = " << charge << "\n";
-                    save("temp_field");
                     no=0;
-                    if(energy == check_energy){
-                        cut_no++;
-                        if(cut_no%often_cut == 0){
-                            dt = 0.9*dt;
+                    if(output) {
+                        updateEnergy();
+                        updateCharge();
+                        cout << no_total << ": energy = " << energy << " : dt = " << dt << " charge = " << charge
+                             << "\n";
+                        save("temp_field");
+
+                        if (energy == check_energy) {
+                            cut_no++;
+                            if (cut_no % often_cut == 0) {
+                                dt = 0.9 * dt;
+                                cut_no = 0;
+                            }
+                        } else {
                             cut_no = 0;
+                            check_energy = energy;
                         }
-                    }
-                    else{
-                        cut_no=0;
-                        check_energy = energy;
                     }
                 }
                 #pragma omp barrier
@@ -1068,7 +1425,9 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut){
                 }
         }
     }
-    setDerivatives = false;
+    if(output) {
+        setDerivatives = false;
+    }
 }
 
 inline vector<double> calculateDynamicEnergy(int pos){

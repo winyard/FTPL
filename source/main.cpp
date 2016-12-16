@@ -2,25 +2,39 @@
 #include "BabySkyrme.hpp"
 #include "SkyrmeWithMeson.hpp"
 
-int main() {
+int main(int argc, char * argv[]) {
 
     double c1 = 0.141;
     double c2 = 0.198;
 
-    int choice = 0;
+    int choice = -1;
 
     Eigen::initParallel();
+
+    if(choice == -1){
+        MPI::Init(argc, argv);
+        FTPL::SkyrmeModelwithMeson my_model(10,10,10,false);
+        my_model.addVectorMeson();
+        my_model.load("in_field", true);
+        my_model.initialCondition(1,0,0,0,0);
+        my_model.updateEnergy();
+        my_model.updateCharge();
+        cout << "the loaded model has energy = " << my_model.getEnergy() << " and charge = " << my_model.getCharge() << "\n";
+        my_model.setTimeInterval(0.005);
+        my_model.MPIAnnealing(10000,1,1,1000,2);
+        my_model.save("temp_field");
+    }
 
     if(choice == 0){
         FTPL::SkyrmeModelwithMeson my_model(10,10,10,false);
         my_model.addVectorMeson();
         my_model.load("temp_field", false);
-        my_model.initialCondition(1,0,0,0,0);
+        //my_model.initialCondition(1,0,0,0,0);
         my_model.updateEnergy();
         my_model.updateCharge();
         cout << "the loaded model has energy = " << my_model.getEnergy() << " and charge = " << my_model.getCharge() << "\n";
         my_model.printParameters();
-        my_model.setTimeInterval(0.01);
+        my_model.setTimeInterval(0.005);
         cout << "vector meson added\n";
         my_model.updateEnergy();
         my_model.updateCharge();
