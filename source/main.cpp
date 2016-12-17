@@ -13,15 +13,18 @@ int main(int argc, char * argv[]) {
 
     if(choice == -1){
         MPI::Init(argc, argv);
+        printMPIDetails();
         FTPL::SkyrmeModelwithMeson my_model(10,10,10,false);
         my_model.addVectorMeson();
         my_model.load("in_field", true);
-        my_model.initialCondition(1,0,0,0,0);
+        //my_model.initialCondition(1,0,0,0,0);
         my_model.updateEnergy();
         my_model.updateCharge();
         cout << "the loaded model has energy = " << my_model.getEnergy() << " and charge = " << my_model.getCharge() << "\n";
         my_model.setTimeInterval(0.005);
-        my_model.MPIAnnealing(10000,1,1,1000,2);
+        Timer tmr;
+        my_model.MPIAnnealing(10,1,1,100,2);
+        cout << "10 loops finished in " << tmr.elapsed() << " sec\n";
         my_model.save("temp_field");
     }
 
@@ -39,7 +42,9 @@ int main(int argc, char * argv[]) {
         my_model.updateEnergy();
         my_model.updateCharge();
         cout << "the loaded model with added vector meson has energy = " << my_model.getEnergy() << " and charge = " << my_model.getCharge() << "\n";
-        my_model.annealing(10000, 2000000, 1);
+        Timer tmr;
+        my_model.annealing(10000, 1000000, 1);
+        cout << "10 loops finished in " << tmr.elapsed() << " sec\n";
         my_model.save("temp_field");
     }
 

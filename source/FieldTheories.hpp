@@ -47,6 +47,25 @@ private:
     std::chrono::time_point<clock_> beg_;
 };
 
+void printMPIDetails(){
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(MPI::COMM_WORLD.Get_rank() == 0){
+        std::cout << "\n----------------------------------------------------------------\n";
+        std::cout << "Requested " << MPI::COMM_WORLD.Get_size() << " MPI processes, let's hear from them:\n\n";
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    #pragma omp parallel
+    {
+        #pragma omp master
+        std::cout << "Node " << MPI::COMM_WORLD.Get_rank() << " - I have " << omp_get_thread_num() << " threads\n";
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(MPI::COMM_WORLD.Get_rank() == 0){
+        std::cout << "----------------------------------------------------------------\n\n";
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
 
 using namespace std;
 
@@ -397,6 +416,7 @@ class TargetSpace {
         CUDA_HOSTDEV void randomise(int i, int field, vector<double> spacing, double dt, bool doubleDerivative = false);
         CUDA_HOSTDEV void derandomise(int i, int field, vector<double> spacing, bool doubleDerivative = false);
         CUDA_HOSTDEV void resetPointers();
+        CUDA_HOSTDEV void CUDA_uploadFields();
     private:
         // Add aditional Field types as they are created here!
         std::vector<Field<Eigen::VectorXd>*> fields1;
@@ -493,13 +513,17 @@ class TargetSpace {
         }
         fields.storeDerivatives(this,false);
         setDerivatives = true;
-        omp_set_num_threads(1);
+        updateEnergy();
+        if(MPI::COMM_WORLD.Get_rank()!=0) {
+            omp_set_num_threads(1);
+        }
         double oldEnergy = energy;
         int check = 0;
         for(int no = 0; no < iterations; no++) {
             MPIFunction(&BaseFieldTheory::annealing, dim, often, localIterations, domainSize, false);
             //sum up the energydensity
             if(MPI::COMM_WORLD.Get_rank()==0) {
+                //fields.storeDerivatives(this,false);
                 updateEnergy();
                 updateCharge();
                 cout << no << "(" << (int) 100*no/iterations<<"%) energy = " << energy << " dt = " << dt << " charge = " << charge << "\n";
@@ -511,6 +535,7 @@ class TargetSpace {
                 if (check == often_cut) {
                     check = 0;
                     dt *= 0.9;
+                    //fields.storeDerivatives(this,false);
                 }
             }
             MPI_Bcast(&dt,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
@@ -518,7 +543,7 @@ class TargetSpace {
     }
 
     void BaseFieldTheory::addOne(vector<int>& pos, vector<int> limits, int component){
-        if(pos[component] == limits[component]){
+        if(pos[component] == limits[component]-1){
             pos[component] = 0;
             addOne(pos, limits, component + 1);
         }else {
@@ -540,25 +565,17 @@ class TargetSpace {
         for(int no = 0; no < fields1.size(); no++){
             for(int i = 0; i < dataDomain.size(); i++) {
                 if (send) {
-                    if(MPI::COMM_WORLD.Get_rank() == 0 && no == 0 && (i == 73||i==0||i==124)&&fields1[no]->data[point+dataDomain[i]][1]>0.01) {
-                        cout << MPI::COMM_WORLD.Get_rank() << "(" << i << ")" << "[" << no << "]" << ": (send) - " << point + dataDomain[i] << " - "<< fields1[no]->data[point+dataDomain[i]] <<"\n";
-                    }
                     MPI_Send(fields1[no]->data[point + dataDomain[i]].data(),
                              fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag, MPI_COMM_WORLD);
                 } else {
                     MPI_Recv(fields1[no]->data[point + dataDomain[i]].data(),
                              fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    if(MPI::COMM_WORLD.Get_rank() == 0 && no == 0 && (i == 73||i==0||i==124)&&fields1[no]->data[point+dataDomain[i]][1]>0.01) {
-                        cout << MPI::COMM_WORLD.Get_rank() << "(" << i << ")" << "[" << no << "]" << ": (recv) - " << point + dataDomain[i] << " - "<< fields1[no]->data[point+dataDomain[i]] <<"\n";
-                    }
+
+
                 }
-                MPI_Barrier(MPI_COMM_WORLD);
             }
-            /*for(int i = 0; i < derivativeDomain.size(); i++) {
+            for(int i = 0; i < derivativeDomain.size(); i++) {
                 if(send) {
-                    if((i == 0 || i == 74 || i == 124 || i == 125)&&fields1[no]->single_derivatives[0][point+derivativeDomain[i]].squaredNorm()>0.00000001) {
-                       //cout << MPI::COMM_WORLD.Get_rank() << "(" << i << ")" << "[" << no << "]" << ": (send) - " << point + derivativeDomain[i] << " - "<< fields1[no]->single_derivatives[0][point+derivativeDomain[i]] <<"\n";
-                    }
                     for(int wrt1 = 0; wrt1 < fields1[no]->dim; wrt1++) {
                         MPI_Send(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
                                  fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, i*(tag+10)+wrt1,
@@ -588,12 +605,8 @@ class TargetSpace {
                             }
                         }
                     }
-                    if((i == 0 || i == 74 || i == 124 || i == 125)&&fields1[no]->single_derivatives[0][point+derivativeDomain[i]].squaredNorm()>0.00000001) {
-                       // cout << MPI::COMM_WORLD.Get_rank() << "(" << i << ")[" << no << "]: (recv) - " << point + derivativeDomain[i] << " - "<< fields1[no]->single_derivatives[0][point+derivativeDomain[i]] <<"\n";
-                    }
                 }
-                MPI_Barrier(MPI_COMM_WORLD);
-            }*/
+            }
         }
 
         for(int no = 0; no < fields2.size(); no++){
@@ -757,9 +770,132 @@ class TargetSpace {
                     wrapAround[i] = 1;
                 }else{wrapAround[i] = 0;}
             }
+            int totalGridNodes = pow(minimalSquare,dimSplit-1) + MPIdim[0];
 
-            MPI_Comm grid;
-            //MPI_Cart_create();
+            //calculate the size of the domains
+            vector<int> standardCellSize(dim);
+            vector<int> finalCellSize(dim);
+            for(int i = 0; i < dim; i++){
+                standardCellSize[i] = floor((size[i] - bdw[2*i] - bdw[2*i+1])/MPIdim[i]);
+                finalCellSize[i] = (size[i] - bdw[2*i] - bdw[2*i+1]) - standardCellSize[i]*(MPIdim[i]-1);
+            }
+
+            MPI_Comm COMM_NEW;
+            MPI_Comm_split(MPI_COMM_WORLD, globalId == 0, 0, &COMM_NEW);
+            if(globalId == 0){
+                // recieve the topology YAY!
+                int positions[totalNo-1];
+                {
+                for(int i = 0; i < totalNo; i++) {
+                    int localPos[dim];
+                    MPI_Recv(&localPos, dim, MPI_INT, i, 9, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                    int point = localPos[0];
+                    int multiplier = 1;
+                    for (int i = 1; i < dim; i++) {
+                        multiplier *= MPIdim[i - 1];
+                        point += localPos[i] * multiplier;
+                    }
+                    positions[point] = i;
+                }
+
+                // calculate the domain vectors (for both standard and final cells)
+                    vector<int> standardDataDomain;
+                    vector<int> standardDerivedDomain;
+                    vector<int> finalDataDomain;
+                    vector<int> finalDerivedDomain;
+                    {
+                        vector<int> pos(dim);
+                        int totalSize = 1.0;
+                        int point;
+                        for (int j = 0; j < dim; j++) { pos[j] = 0; totalSize *= standardCellSize[j];}
+                        for (int i = 0; i < totalSize; i++) {
+                            //porgress the pos value using the limiter of domain
+                            if (i > 0) {
+                                addOne(pos, standardCellSize);
+                            }
+                            //calculate the corresponding 1-dim value (bear in mind the different limits!
+                            point = pos[0];
+                            int multiplier = 1;
+                            for (int i = 1; i < dim; i++) {
+                                multiplier *= size[i - 1];
+                                point += pos[i] * multiplier;
+                            }
+                            //add the points to the corresponding vectors
+                            vector<int> temp_size = size;
+                            size = standardCellSize;
+                            if (inBoundary(pos)) {
+                                standardDataDomain.push_back(point);
+                            }
+                            size = temp_size;
+                            standardDerivedDomain.push_back(point);
+                        }
+
+                        for (int j = 0; j < dim; j++) { pos[j] = 0; totalSize *= finalCellSize[j];}
+                        for (int i = 0; i < totalSize; i++) {
+                            //porgress the pos value using the limiter of domain
+                            if (i > 0) {
+                                addOne(pos, finalCellSize);
+                            }
+                            //calculate the corresponding 1-dim value (bear in mind the different limits!
+                            point = pos[0];
+                            int multiplier = 1;
+                            for (int i = 1; i < dim; i++) {
+                                multiplier *= size[i - 1];
+                                point += pos[i] * multiplier;
+                            }
+                            //add the points to the corresponding vectors
+                            vector<int> temp_size = size;
+                            for(int j = 0; j < dim; j++){size[j] = finalCellSize[j];}
+                            if (inBoundary(pos)) {
+                                finalDataDomain.push_back(point);
+                            }
+                            size = temp_size;
+                            finalDerivedDomain.push_back(point);
+                        }
+                    }
+                    //split the grid and send the various data to the slaves:
+                    for(int i = 0; i < totalGridNodes; i++){
+
+
+
+
+
+
+
+                    }
+
+
+
+
+                    value[0] = in;
+                    for(int i = 0; i < dim-1; i++) {
+                        value[i+1] = 0;
+                        if (value[i] >= size[i]){
+                            value[i+1] = value[i]/size[i];
+                            value[i] = value[i]%size[i];
+                        }
+                    }
+
+                    positions[]
+
+                }
+
+            }else{
+                MPI_Comm COMM_GRID;
+                MPI_Cart_create(COMM_NEW, dim, MPIdim, wrapAround, 1, &COMM_GRID);
+
+                //communicate where you are in the grid to the master node
+                int mypos[dim];
+                MPI_Send(&mypos,dim,MPI_INT, 0, 9, MPI_COMM_WORLD);
+                MPI_Barrier(COMM_NEW);
+                MPI_Recv(&updated, 1, MPI_INT, no, loop, MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE)
+            }
+
+
+            //upload inital data to the
+
         }
         else{
             //create the transfer Domains for the fields and derived quantities (a vector containing all the values that are to be transfered between master and slave nodes)
@@ -801,34 +937,40 @@ class TargetSpace {
                 std::mt19937 mt(rd());
                 std::uniform_int_distribution<int> p_rand(0, getTotalSize()-corrector);
                 int points[totalNo];
-                int updated;
-                int pos;
-                for(int loop = 0; loop < loops; loop++){
-                    for(int no = 1; no < totalNo; no++){
-                        MPI_Recv(&updated,1,MPI_INT,no,loop,MPI_COMM_WORLD,MPI_STATUS_IGNORE);//recieve if the point has been updated
-                        if(updated==1){
-                            fields.MPICommDomain(no,points[no],derivedDomain,derivedDomain,loop,false,false);
-                            //MPICommEnergy(no,points[no],derivedDomain,loop,false);
+                int loop = 0;
+                    #pragma omp parallel
+                    while(loop < loops) {
+                        #pragma omp for nowait
+                        for (int no = 1; no < totalNo; no++) {
+                            int updated;
+                            MPI_Recv(&updated, 1, MPI_INT, no, loop, MPI_COMM_WORLD,
+                                     MPI_STATUS_IGNORE);//recieve if the point has been updated
+                            if (updated == 1) {
+                                fields.MPICommDomain(no, points[no], dataDomain, derivedDomain, loop, false, false);
+                                MPICommEnergy(no, points[no], derivedDomain, loop, false);
+                            }
+                            int pos = p_rand(mt);// correct to right random no. generator
+                            points[no] = pos;
+                            fields.MPICommDomain(no, pos, derivedDomain, derivedDomain, loop, true, false);
+                            MPICommEnergy(no, pos, derivedDomain, loop, true);
                         }
-                        pos = p_rand(mt);// correct to right random no. generator
-                        points[no] = pos;
-                        fields.MPICommDomain(no,pos,derivedDomain,derivedDomain,loop,true,false);
-                        //MPICommEnergy(no,pos,derivedDomain,loop,true);
+                        #pragma omp barrier
+                        #pragma omp master
+                        {
+                            loop++;
+                        }
                     }
-                }
-
             }else{
                 int updated = 0;
                 for(int loop = 0; loop < loops; loop++){
                     MPI_Send(&updated,1,MPI_INT,0,loop,MPI_COMM_WORLD);
                     if(updated == 1){
-                            fields.MPICommDomain(0,0,derivedDomain,derivedDomain,loop,true,false);
-                            //MPICommEnergy(0,0,derivedDomain,loop,true);
+                            fields.MPICommDomain(0,0,dataDomain,derivedDomain,loop,true,false);
+                            MPICommEnergy(0,0,derivedDomain,loop,true);
                     }
                     fields.MPICommDomain(0,0,derivedDomain,derivedDomain,loop,false,false);
-                    //MPICommEnergy(0,0,derivedDomain,loop,false);;
-                    //updated = (this->*localFunction)(localIterations, 1, 1, false);
-                    updated = 1;
+                    MPICommEnergy(0,0,derivedDomain,loop,false);
+                    updated = (this->*localFunction)(localIterations, 1, 1, false);
                 }
             }
         }
@@ -1305,7 +1447,7 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
     }
 
 bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool output){
-    bool altered = true;
+    bool altered = false;
     if(dynamic && output){
         cout << "Warning! You have run annealing on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
@@ -1348,14 +1490,14 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
             for (int i = 0; i < dim; i++) {
                 store++;
                 int point = pos + mult1;
-                if (inBoundary(point)) {
+                if (inBoundary(point)||!output) {
                     newEnergyDensity[store] = calculateEnergy(point);
                     newEnergy += newEnergyDensity[store];
                     oldEnergy += energydensity[point];
                 }
                 store++;
                 point = pos - mult1;
-                if (inBoundary(point)) {
+                if (inBoundary(point)||!output) {
                     newEnergyDensity[store] = calculateEnergy(point);
                     newEnergy += newEnergyDensity[store];
                     oldEnergy += energydensity[point];
@@ -1364,14 +1506,14 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                 for (int j = 0; j <= i; j++) {
                     store++;
                     point = pos + mult1 + mult2;
-                    if (inBoundary(point)) {
+                    if (inBoundary(point)||!output) {
                         newEnergyDensity[store] = calculateEnergy(point);
                         newEnergy += newEnergyDensity[store];
                         oldEnergy += energydensity[point];
                     }
                     store++;
                     point = pos - mult1 - mult2;
-                    if (inBoundary(point)) {
+                    if (inBoundary(point)||!output) {
                         newEnergyDensity[store] = calculateEnergy(point);
                         newEnergy += newEnergyDensity[store];
                         oldEnergy += energydensity[point];
@@ -1379,14 +1521,14 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                     if(i != j) {
                         store++;
                         point = pos + mult1 - mult2;
-                        if (inBoundary(point)) {
+                        if (inBoundary(point)||!output) {
                             newEnergyDensity[store] = calculateEnergy(point);
                             newEnergy += newEnergyDensity[store];
                             oldEnergy += energydensity[point];
                         }
                         store++;
                         point = pos - mult1 + mult2;
-                        if (inBoundary(point)) {
+                        if (inBoundary(point)||!output) {
                             newEnergyDensity[store] = calculateEnergy(point);
                             newEnergy += newEnergyDensity[store];
                             oldEnergy += energydensity[point];
@@ -1396,7 +1538,7 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                 }
             mult1 *= size[i];
             }
-            if (newEnergy > oldEnergy || newEnergy > -999999.0 || true) { // add some heat term! :) - as well as some fall off
+            if (newEnergy > oldEnergy) { // add some heat term! :) - as well as some fall off
                 fields.derandomise(pos, field, spacing);
             } else {
                 altered = true;
@@ -1406,35 +1548,35 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                 for (int i = 0; i < dim; i++) {
                     store++;
                     int point = pos + mult1;
-                    if (inBoundary(point)) {
+                    if (inBoundary(point)||!output) {
                         energydensity[point] = newEnergyDensity[store];
                     }
                     store++;
                     point = pos - mult1;
-                    if (inBoundary(point)) {
+                    if (inBoundary(point)||!output) {
                         energydensity[point] = newEnergyDensity[store];
                     }
                     double mult2 = 1.0;
                     for (int j = 0; j <= i; j++) {
                         store++;
                         point = pos + mult1 + mult2;
-                        if (inBoundary(point)) {
+                        if (inBoundary(point)||!output) {
                             energydensity[point] = newEnergyDensity[store];
                         }
                         store++;
                         point = pos - mult1 - mult2;
-                        if (inBoundary(point)) {
+                        if (inBoundary(point)||!output) {
                             energydensity[point] = newEnergyDensity[store];
                         }
                         if(i != j) {
                             store++;
                             point = pos + mult1 - mult2;
-                            if (inBoundary(point)) {
+                            if (inBoundary(point)||!output) {
                                 energydensity[point] = newEnergyDensity[store];
                             }
                             store++;
                             point = pos - mult1 + mult2;
-                            if (inBoundary(point)) {
+                            if (inBoundary(point)||!output) {
                                 energydensity[point] = newEnergyDensity[store];
                             }
                         }
