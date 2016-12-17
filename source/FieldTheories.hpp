@@ -94,7 +94,7 @@ class Field {
         CUDA_HOSTDEV Field<T>* resize(vector<int> sizein);
         CUDA_HOSTDEV void progressTime(double time_step);
         CUDA_HOSTDEV void update_derivatives(vector<double> spacing);
-        CUDA_HOSTDEV void alter_point(int i, T value, vector<double> spacing);
+        CUDA_HOSTDEV inline void alter_point(int i, T value, vector<double> spacing, bool doubleDerivative);
         bool normalised;
     protected:
 		vector<int>  size;
@@ -102,7 +102,7 @@ class Field {
 };
 
 template<class T>
-    void Field<T>::alter_point(int i, T value, vector<double> spacing){
+    void Field<T>::alter_point(int i, T value, vector<double> spacing, bool doubleDerivative){
         buffer[i] = data[i];
         data[i] = value;
         T dif = data[i]-buffer[i];
@@ -114,32 +114,34 @@ template<class T>
             single_derivatives[wrt1][i-1*mult1] += 8.0*change;
             single_derivatives[wrt1][i+1*mult1] += -8.0*change;
             single_derivatives[wrt1][i+2*mult1] += change;
-            change = dif/(12.0*spacing[wrt1]*spacing[wrt1]);
-            double_derivatives[wrt1][wrt1][i-2*mult1] += -change;
-            double_derivatives[wrt1][wrt1][i-mult1] += +16.0*change;
-            double_derivatives[wrt1][wrt1][i] += -30.0*change;
-            double_derivatives[wrt1][wrt1][i+mult1] += +16.0*change;
-            double_derivatives[wrt1][wrt1][i+2*mult1] += -change;
-            double mult2 = 1.0;
-            for(int wrt2=0; wrt2<wrt1; wrt2++) {
-                change = dif/(144.0*spacing[wrt1]*spacing[wrt2]);
-                double_derivatives[wrt2][wrt1][i-2*mult2-2*mult1] += change;
-                double_derivatives[wrt2][wrt1][i-mult2-2*mult1] += -8.0*change;
-                double_derivatives[wrt2][wrt1][i+mult2-2*mult1] += 8.0*change;
-                double_derivatives[wrt2][wrt1][i+2*mult2-2*mult1] += -change;
-                double_derivatives[wrt2][wrt1][i-2*mult2-mult1] += -8.0*change;
-                double_derivatives[wrt2][wrt1][i-mult2-mult1] += +64.0*change;
-                double_derivatives[wrt2][wrt1][i+mult2-mult1] += -64.0*change;
-                double_derivatives[wrt2][wrt1][i+2*mult2-mult1] += +8.0*change;
-                double_derivatives[wrt2][wrt1][i-2*mult2+mult1] += +8.0*change;
-                double_derivatives[wrt2][wrt1][i-mult2+mult1] += -64.0*change;
-                double_derivatives[wrt2][wrt1][i+mult2+mult1] += +64.0*change;
-                double_derivatives[wrt2][wrt1][i+2*mult2+mult1] += -8.0*change;
-                double_derivatives[wrt2][wrt1][i-2*mult2+2*mult1] += -change;
-                double_derivatives[wrt2][wrt1][i-mult2+2*mult1] += 8.0*change;
-                double_derivatives[wrt2][wrt1][i+mult2+2*mult1] += -8.0*change;
-                double_derivatives[wrt2][wrt1][i+2*mult2+2*mult1] += change;
-                mult2 *= size[wrt2];
+            if(doubleDerivative) {
+                change = dif / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                double_derivatives[wrt1][wrt1][i - 2 * mult1] += -change;
+                double_derivatives[wrt1][wrt1][i - mult1] += +16.0 * change;
+                double_derivatives[wrt1][wrt1][i] += -30.0 * change;
+                double_derivatives[wrt1][wrt1][i + mult1] += +16.0 * change;
+                double_derivatives[wrt1][wrt1][i + 2 * mult1] += -change;
+                double mult2 = 1.0;
+                for (int wrt2 = 0; wrt2 < wrt1; wrt2++) {
+                    change = dif / (144.0 * spacing[wrt1] * spacing[wrt2]);
+                    double_derivatives[wrt2][wrt1][i - 2 * mult2 - 2 * mult1] += change;
+                    double_derivatives[wrt2][wrt1][i - mult2 - 2 * mult1] += -8.0 * change;
+                    double_derivatives[wrt2][wrt1][i + mult2 - 2 * mult1] += 8.0 * change;
+                    double_derivatives[wrt2][wrt1][i + 2 * mult2 - 2 * mult1] += -change;
+                    double_derivatives[wrt2][wrt1][i - 2 * mult2 - mult1] += -8.0 * change;
+                    double_derivatives[wrt2][wrt1][i - mult2 - mult1] += +64.0 * change;
+                    double_derivatives[wrt2][wrt1][i + mult2 - mult1] += -64.0 * change;
+                    double_derivatives[wrt2][wrt1][i + 2 * mult2 - mult1] += +8.0 * change;
+                    double_derivatives[wrt2][wrt1][i - 2 * mult2 + mult1] += +8.0 * change;
+                    double_derivatives[wrt2][wrt1][i - mult2 + mult1] += -64.0 * change;
+                    double_derivatives[wrt2][wrt1][i + mult2 + mult1] += +64.0 * change;
+                    double_derivatives[wrt2][wrt1][i + 2 * mult2 + mult1] += -8.0 * change;
+                    double_derivatives[wrt2][wrt1][i - 2 * mult2 + 2 * mult1] += -change;
+                    double_derivatives[wrt2][wrt1][i - mult2 + 2 * mult1] += 8.0 * change;
+                    double_derivatives[wrt2][wrt1][i + mult2 + 2 * mult1] += -8.0 * change;
+                    double_derivatives[wrt2][wrt1][i + 2 * mult2 + 2 * mult1] += change;
+                    mult2 *= size[wrt2];
+                }
             }
             mult1 *= size[wrt1];
         }
@@ -380,7 +382,7 @@ class TargetSpace {
         CUDA_HOSTDEV Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic, bool isNormalised);
         CUDA_HOSTDEV Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic, bool isNormalised);
         CUDA_HOSTDEV Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic, bool isNormalised);
-        CUDA_HOSTDEV void MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send);
+        CUDA_HOSTDEV void MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send,bool doubleDerivative = true);
         CUDA_HOSTDEV void resize(vector<int> sizein);
         CUDA_HOSTDEV void load_fields(ifstream& loadfile, int totalSize);
         CUDA_HOSTDEV void save_fields(ofstream& savefile, int totalSize);
@@ -391,9 +393,9 @@ class TargetSpace {
         CUDA_HOSTDEV void moveToBuffer();
         CUDA_HOSTDEV void cutKinetic(int pos);
         CUDA_HOSTDEV int no_fields;
-        CUDA_HOSTDEV void storeDerivatives(BaseFieldTheory * theory);
-        CUDA_HOSTDEV void randomise(int i, int field, vector<double> spacing, double dt);
-        CUDA_HOSTDEV void derandomise(int i, int field, vector<double> spacing);
+        CUDA_HOSTDEV void storeDerivatives(BaseFieldTheory * theory, bool doubleDerivative);
+        CUDA_HOSTDEV void randomise(int i, int field, vector<double> spacing, double dt, bool doubleDerivative = false);
+        CUDA_HOSTDEV void derandomise(int i, int field, vector<double> spacing, bool doubleDerivative = false);
         CUDA_HOSTDEV void resetPointers();
     private:
         // Add aditional Field types as they are created here!
@@ -445,7 +447,7 @@ class TargetSpace {
         CUDA_HOSTDEV void plotEnergy();
         CUDA_HOSTDEV void printParameters();
         CUDA_HOSTDEV void setMetricType(string type);
-        CUDA_HOSTDEV void annealing(int iterations, int often, int often_cut, bool output = true);
+        CUDA_HOSTDEV bool annealing(int iterations, int often, int often_cut, bool output = true);
         template <class T>
         CUDA_HOSTDEV inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
@@ -453,7 +455,7 @@ class TargetSpace {
         template <class T>
         CUDA_HOSTDEV inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
         CUDA_HOSTDEV double getCharge(){return charge;};
-        CUDA_HOSTDEV void MPIFunction(void (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize = {});
+        CUDA_HOSTDEV void MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize = {}, bool doubleDerivative = true);
         CUDA_HOSTDEV void MPIAnnealing(int iterations, int localIterations, int localPoints, int often, int often_cut);
         CUDA_HOSTDEV inline void addOne(vector<int>& pos, vector<int> limits, int component = 0);
     protected:
@@ -489,13 +491,13 @@ class TargetSpace {
             fields.resize(domainSize);
             size = domainSize;
         }
-        fields.storeDerivatives(this);
+        fields.storeDerivatives(this,false);
         setDerivatives = true;
         omp_set_num_threads(1);
         double oldEnergy = energy;
         int check = 0;
         for(int no = 0; no < iterations; no++) {
-            MPIFunction(&BaseFieldTheory::annealing, dim, often, localIterations, domainSize);
+            MPIFunction(&BaseFieldTheory::annealing, dim, often, localIterations, domainSize, false);
             //sum up the energydensity
             if(MPI::COMM_WORLD.Get_rank()==0) {
                 updateEnergy();
@@ -534,7 +536,7 @@ class TargetSpace {
         }
     }
 
-    void TargetSpace::MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send){
+    void TargetSpace::MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send,bool doubleDerivative){
         for(int no = 0; no < fields1.size(); no++){
             for(int i = 0; i < dataDomain.size(); i++) {
                 if (send) {
@@ -551,10 +553,14 @@ class TargetSpace {
                         MPI_Send(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
                                  fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
                                  MPI_COMM_WORLD);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Send(fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                     fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
-                                     MPI_COMM_WORLD);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Send(
+                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(),
+                                        MPI_DOUBLE, partner, tag,
+                                        MPI_COMM_WORLD);
+                            }
                         }
                     }
                 }else{
@@ -562,10 +568,14 @@ class TargetSpace {
                         MPI_Recv(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
                                  fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
                                  MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Recv(fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                     fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, tag,
-                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Recv(
+                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(),
+                                        MPI_DOUBLE, partner, tag,
+                                        MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            }
                         }
                     }
                 }
@@ -588,10 +598,12 @@ class TargetSpace {
                         MPI_Send(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
                                  1, MPI_DOUBLE, partner, tag,
                                  MPI_COMM_WORLD);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Send(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                     1, MPI_DOUBLE, partner, tag,
-                                     MPI_COMM_WORLD);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Send(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                         1, MPI_DOUBLE, partner, tag,
+                                         MPI_COMM_WORLD);
+                            }
                         }
                     }
                 }else{
@@ -599,10 +611,12 @@ class TargetSpace {
                         MPI_Recv(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
                                  1, MPI_DOUBLE, partner, tag,
                                  MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Recv(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                     1, MPI_DOUBLE, partner, tag,
-                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Recv(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                         1, MPI_DOUBLE, partner, tag,
+                                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            }
                         }
                     }
                 }
@@ -624,10 +638,12 @@ class TargetSpace {
                         MPI_Send(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
                                  1, MPI_INT, partner, tag,
                                  MPI_COMM_WORLD);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Send(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                     1, MPI_INT, partner, tag,
-                                     MPI_COMM_WORLD);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Send(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                         1, MPI_INT, partner, tag,
+                                         MPI_COMM_WORLD);
+                            }
                         }
                     }
                 }else{
@@ -635,10 +651,12 @@ class TargetSpace {
                         MPI_Recv(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
                                  1, MPI_INT, partner, tag,
                                  MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Recv(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                     1, MPI_INT, partner, tag,
-                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Recv(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                         1, MPI_INT, partner, tag,
+                                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            }
                         }
                     }
                 }
@@ -660,10 +678,16 @@ class TargetSpace {
                         MPI_Send(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
                                  fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols()*fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows(), MPI_DOUBLE, partner, tag,
                                  MPI_COMM_WORLD);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Send(fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                     fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].cols()*fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(), MPI_DOUBLE, partner, tag,
-                                     MPI_COMM_WORLD);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Send(
+                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                        fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                    derivativeDomain[i]].cols() *
+                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(),
+                                        MPI_DOUBLE, partner, tag,
+                                        MPI_COMM_WORLD);
+                            }
                         }
                     }
                 }else{
@@ -671,10 +695,16 @@ class TargetSpace {
                         MPI_Recv(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
                                  fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows()*fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols(), MPI_DOUBLE, partner, tag,
                                  MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        for(int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                            MPI_Recv(fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                     fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].cols()*fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(), MPI_DOUBLE, partner, tag,
-                                     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                        if(doubleDerivative) {
+                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                MPI_Recv(
+                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
+                                        fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                    derivativeDomain[i]].cols() *
+                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(),
+                                        MPI_DOUBLE, partner, tag,
+                                        MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            }
                         }
                     }
                 }
@@ -683,7 +713,7 @@ class TargetSpace {
 
     }
 
-    void BaseFieldTheory::MPIFunction(void (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize) {
+    void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize, bool doubleDerivative) {
         int globalId = MPI::COMM_WORLD.Get_rank();
         int totalNo = MPI::COMM_WORLD.Get_size();
 
@@ -763,12 +793,12 @@ class TargetSpace {
                     for(int no = 1; no < totalNo; no++){
                         MPI_Recv(&updated,1,MPI_INT,no,loop,MPI_COMM_WORLD,MPI_STATUS_IGNORE);//recieve if the point has been updated
                         if(updated==1){
-                            fields.MPICommDomain(no,points[no],dataDomain,derivedDomain,loop,false);
+                            fields.MPICommDomain(no,points[no],dataDomain,derivedDomain,loop,false,false);
                             MPICommEnergy(no,points[no],derivedDomain,loop,false);
                         }
                         pos = p_rand(mt);// correct to right random no. generator
                         points[no] = pos;
-                        fields.MPICommDomain(no,pos,derivedDomain,derivedDomain,loop,true);
+                        fields.MPICommDomain(no,pos,derivedDomain,derivedDomain,loop,true,false);
                         MPICommEnergy(no,pos,derivedDomain,loop,true);
                     }
                 }
@@ -778,13 +808,12 @@ class TargetSpace {
                 for(int loop = 0; loop < loops; loop++){
                     MPI_Send(&updated,1,MPI_INT,0,loop,MPI_COMM_WORLD);
                     if(updated == 1){
-                            fields.MPICommDomain(0,0,dataDomain,derivedDomain,loop,true);
+                            fields.MPICommDomain(0,0,dataDomain,derivedDomain,loop,true,false);
                             MPICommEnergy(0,0,derivedDomain,loop,true);
                     }
-                    fields.MPICommDomain(0,0,derivedDomain,derivedDomain,loop,false);
+                    fields.MPICommDomain(0,0,derivedDomain,derivedDomain,loop,false,false);
                     MPICommEnergy(0,0,derivedDomain,loop,false);
-                    (this->*localFunction)(localIterations, 1, 1, false);
-                    updated = 1;
+                    updated = (this->*localFunction)(localIterations, 1, 1, false);
                 }
             }
         }
@@ -799,29 +828,29 @@ class TargetSpace {
         cout << "\n";
     }
 
-    void TargetSpace::randomise(int i, int field, vector<double> spacing, double dt){
+    void TargetSpace::randomise(int i, int field, vector<double> spacing, double dt, bool doubleDerivative){
         std::random_device rd;
         std::mt19937 mt(rd());
         if(field <= fields1.size()-1){
             Eigen::VectorXd value = fields1[field]->data[i];
             std::uniform_real_distribution<double> dist(-dt, dt);
             for(int j = 0; j < value.size(); j++){
-                value[j] = fields1[field]->data[i][j] + dist(mt);
+                value[j] += dist(mt);
             }
             if(fields1[field]->normalised){
                 value.normalize();
             }
-            fields1[field]->alter_point(i,value,spacing);
+            fields1[field]->alter_point(i,value,spacing,doubleDerivative);
         }
         else if(field <= fields1.size() + fields2.size() - 1){
             std::uniform_real_distribution<double> dist(fields2[field - fields1.size()]->min, fields2[field - fields1.size()]->max);
             double value = dist(mt);
-            fields2[field - fields1.size()]->alter_point(i,value,spacing);
+            fields2[field - fields1.size()]->alter_point(i,value,spacing,doubleDerivative);
         }
         else if(field<= fields1.size() + fields2.size() +fields3.size() -1){
             std::uniform_int_distribution<int> dist(fields3[field - fields1.size() - fields2.size()]->min, fields3[field - fields1.size() - fields2.size()]->max);
             int value = dist(mt);
-            fields3[field - fields1.size() - fields2.size()]->alter_point(i,value,spacing);
+            fields3[field - fields1.size() - fields2.size()]->alter_point(i,value,spacing,doubleDerivative);
         }
         else{
             Eigen::MatrixXd value = fields4[field - fields1.size() - fields2.size()  - fields3.size()]->data[i];
@@ -833,56 +862,64 @@ class TargetSpace {
             if(fields4[field - fields1.size() - fields2.size()  - fields3.size()]->normalised){
                 value.normalize();
             }
-            fields4[field - fields1.size() - fields2.size()  - fields3.size()]->alter_point(i,value,spacing);
+            fields4[field - fields1.size() - fields2.size()  - fields3.size()]->alter_point(i,value,spacing,doubleDerivative);
         }
     }
 
-    void TargetSpace::derandomise(int i, int field, vector<double> spacing){
+    void TargetSpace::derandomise(int i, int field, vector<double> spacing,bool doubleDerivative){
         if(field <= fields1.size()-1){
-                fields1[field]->alter_point(i,fields1[field]->buffer[i],spacing);
+                fields1[field]->alter_point(i,fields1[field]->buffer[i],spacing,doubleDerivative);
         }
         else if(field <= fields1.size() + fields2.size() - 1){
                 int point = field - fields1.size();
-                fields2[point]->alter_point(i,fields2[point]->buffer[i],spacing);
+                fields2[point]->alter_point(i,fields2[point]->buffer[i],spacing,doubleDerivative);
         }
         else if(field <= fields1.size() + fields2.size() +fields3.size() -1){
             int point = field - fields1.size() - fields2.size();
-                fields3[point]->alter_point(i,fields3[point]->buffer[i],spacing);
+                fields3[point]->alter_point(i,fields3[point]->buffer[i],spacing,doubleDerivative);
         }
         else{
                 int point = field - fields1.size() - fields2.size() - fields3.size();
-                fields4[point]->alter_point(i,fields4[point]->buffer[i],spacing);
+                fields4[point]->alter_point(i,fields4[point]->buffer[i],spacing,doubleDerivative);
         }
     }
 
 
 
-    void TargetSpace::storeDerivatives(BaseFieldTheory * theory){
+    void TargetSpace::storeDerivatives(BaseFieldTheory * theory,bool doubleDerivative){
         for(int i = 0; i < fields1.size(); i++){
             fields1[i]->single_derivatives.resize(theory->dim);
-            fields1[i]->double_derivatives.resize(theory->dim);
+            if(doubleDerivative) {
+                fields1[i]->double_derivatives.resize(theory->dim);
+            }
             for(int j = 0; j < theory->dim ; j++) {
                 fields1[i]->single_derivatives[j].resize(theory->getTotalSize());
-                fields1[i]->double_derivatives[j].resize(theory->dim);
-                for(int k = j; k < theory->dim; k++ ) {
-                    fields1[i]->double_derivatives[j][k].resize(theory->getTotalSize());
+                if(doubleDerivative) {
+                    fields1[i]->double_derivatives[j].resize(theory->dim);
+                    for (int k = j; k < theory->dim; k++) {
+                        fields1[i]->double_derivatives[j][k].resize(theory->getTotalSize());
+                    }
                 }
             }
             for(int j = 0; j < theory->getTotalSize() ; j++) {
             if (theory->inBoundary(j)) {
                 for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
                     fields1[i]->single_derivatives[wrt1][j] = theory->single_derivative(fields1[i], wrt1, j);
-                    for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
-                        fields1[i]->double_derivatives[wrt1][wrt2][j] = theory->double_derivative(fields1[i], wrt1,
-                                                                                                 wrt2, j);
+                    if(doubleDerivative) {
+                        for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
+                            fields1[i]->double_derivatives[wrt1][wrt2][j] = theory->double_derivative(fields1[i], wrt1,
+                                                                                                      wrt2, j);
+                        }
                     }
                 }
             }else{
                 for (int wrt1 = 0; wrt1 < theory->dim; wrt1++) {
                     fields1[i]->single_derivatives[wrt1][j] = Eigen::VectorXd::Zero(fields1[i]->data[0].size());
-                    for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
-                        fields1[i]->double_derivatives[wrt1][wrt2][j] = Eigen::VectorXd::Zero(
-                                fields1[i]->data[0].size());
+                    if(doubleDerivative) {
+                        for (int wrt2 = wrt1; wrt2 < theory->dim; wrt2++) {
+                            fields1[i]->double_derivatives[wrt1][wrt2][j] = Eigen::VectorXd::Zero(
+                                    fields1[i]->data[0].size());
+                        }
                     }
                 }
             }
@@ -1252,7 +1289,8 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
         parameterNames.push_back(name);
     }
 
-void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool output){
+bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool output){
+    bool altered = false;
     if(dynamic && output){
         cout << "Warning! You have run annealing on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
@@ -1263,7 +1301,7 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
     int cut_no = 0;
     int seperator = 2*getTotalSize()/size[dim-1];
     if(!setDerivatives) {
-        fields.storeDerivatives(this);
+        fields.storeDerivatives(this,false);
         setDerivatives = true;
         updateEnergy();
     }
@@ -1290,7 +1328,7 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
             newEnergy = calculateEnergy(pos);
             oldEnergy = energydensity[pos];
             int store = 0;
-            newEnergyDensity[store] = calculateEnergy(pos);
+            newEnergyDensity[store] = newEnergy;
             double mult1 = 1.0;
             for (int i = 0; i < dim; i++) {
                 store++;
@@ -1345,8 +1383,8 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
             }
             if (newEnergy > oldEnergy || newEnergy > -999999.0 || true) { // add some heat term! :) - as well as some fall off
                 fields.derandomise(pos, field, spacing);
-                updateEnergy();
             } else {
+                altered = true;
                 store = 0;
                 energydensity[pos] = newEnergyDensity[store];
                 double mult1 = 1.0;
@@ -1392,7 +1430,7 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
 
                 }
 
-            if (no % often == 0 && no>0) {
+            if (no % often == 0) {
                 #pragma omp barrier
                 #pragma omp master
                 {
@@ -1415,7 +1453,7 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                             cut_no = 0;
                             check_energy = energy;
                         }
-                    }
+                    }else if()
                 }
                 #pragma omp barrier
                 }
@@ -1428,6 +1466,7 @@ void BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
     if(output) {
         setDerivatives = false;
     }
+    return altered;
 }
 
 inline vector<double> calculateDynamicEnergy(int pos){
