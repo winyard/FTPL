@@ -468,6 +468,7 @@ class TargetSpace {
         CUDA_HOSTDEV void printParameters();
         CUDA_HOSTDEV void setMetricType(string type);
         CUDA_HOSTDEV bool annealing(int iterations, int often, int often_cut, bool output = true);
+        CUDA_HOSTDEV void getDomain(vector<int> dimensions, vector<int> * target, vector<int>* targetBoundaries);
         template <class T>
         CUDA_HOSTDEV inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
@@ -499,6 +500,33 @@ class TargetSpace {
         vector<double *> parameters;
         vector<string> parameterNames;
     };
+
+    void BaseFieldTheory::getDomain(vector<int> dimensions, vector<int> target, vector<int> targetBoundaries) {
+        vector<int> pos(dim);
+        int totalSize = 1;
+        int point;
+        for (int j = 0; j < dim; j++) { pos[j] = 0; totalSize *= dimensions[j];}
+        for (int i = 0; i < totalSize; i++) {
+            //porgress the pos value using the limiter of domain
+            if (i > 0) {
+                addOne(pos, dimensions);
+            }
+            //calculate the corresponding 1-dim value (bear in mind the different limits!)
+            point = pos[0];
+            int multiplier = 1;
+            for (int i = 1; i < dim; i++) {
+                multiplier *= size[i - 1];
+                point += pos[i] * multiplier;
+            }
+            //add the points to the corresponding vectors
+            vector<int> temp_size = size;
+            size = dimensions; // temporarily set the size of the theory to get the correct boundary values
+            if (inBoundary(pos)) {
+                target.push_back(point);
+            }else{targetBoundaries.push_back(point);}
+            size = temp_size;
+        }
+    }
 
     void BaseFieldTheory::MPIAnnealing(int iterations, int localIterations, int localPoints, int often, int often_cut) {
         vector<int> domainSize;
@@ -740,37 +768,55 @@ class TargetSpace {
 
     }
 
-    void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize, bool doubleDerivative) {
+    int * BaseFieldTheory::calculateSplitting(int dimension, int noNodes) {
+
+        int minimalSquare = (int) floor(exp((1.0 / dimSplit) * log(totalNo - 1)));
+        int leftover = totalNo - pow(minimalSquare, dimSplit);
+        for (int i = 0; i < dim; i++) {
+            MPIdim[i] = minimalSquare;
+        }
+        MPIdim[0] += (int) floor(exp((1.0 / (dimSplit - 1)) * log(leftover)));
+        cout << "the selected topology is ";
+        for (int i = 0; i < dim; i++) {
+            if (i != 0) { cout << "x"; }
+            cout << MPIdim[i];
+        }
+        cout << "\n";
+        cout << "there are " << totalNo - pow(minimalSquare, dimSplit - 1) - MPIdim[0]
+             << " unused nodes out of a total of " << totalNo << " which is "
+             << 100.0 * (totalNo - pow(minimalSquare, dimSplit - 1) - MPIdim[0]) / totalNo << "%\n";
+        if (totalNo - pow(minimalSquare, dimSplit - 1) - MPIdim[0] != 0) {
+            cout
+                    << "would suggest exiting and rerunning code with correct number of nodes! - but hey, I'm not your mother\n";
+        }
+
+        return MPIdim;
+    }
+
+void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize, bool doubleDerivative) {
         int globalId = MPI::COMM_WORLD.Get_rank();
         int totalNo = MPI::COMM_WORLD.Get_size();
 
-        if(domainSize.empty()){
+        if(domainSize.empty()) {
             //Split function equally across the grid
             //calculate the grid splitting
             int MPIdim[dim];
             int wrapAround[dim];
 
-            int minimalSquare = (int)floor( exp((1.0/dimSplit)*log(totalNo-1)) );
-            int leftover = totalNo -pow(minimalSquare,dimSplit);
-            for(int i = 0; i < dim; i++) {
-                MPIdim[i] = minimalSquare;
-            }
-            MPIdim[0] += (int)floor( exp((1.0/(dimSplit-1))*log(leftover))    );
-            cout << "the selected topology is ";
-            for(int i = 0; i < dim; i++) {
-            if(i != 0){cout << "x";}
-                cout << MPIdim[i];
-            }
-            cout << "\n";
-            cout << "there are " << totalNo -pow(minimalSquare,dimSplit-1) - MPIdim[0] << " unused nodes out of a total of " << totalNo << " which is " << 100.0*(totalNo -pow(minimalSquare,dimSplit-1) - MPIdim[0])/ totalNo << "%\n";
-            if(totalNo -pow(minimalSquare,dimSplit-1) - MPIdim[0] != 0){cout << "would suggest exiting and rerunning code with correct number of nodes! - but hey, I'm not your mother\n";}
-            for(int i = 0; i < dim; i++) {
-                if (boundarytype[2*i] == 1){
+            MPIdim = calculateSplitting(dim, totalNo - 1);
+
+            //setting the boundary types
+            for (int i = 0; i < dim; i++) {
+                if (boundarytype[2 * i] == 1) {
                     cout << "Warning Periodic boundary conditions have not been comprehensively tested for MPI\n";
                     wrapAround[i] = 1;
-                }else{wrapAround[i] = 0;}
+                } else { wrapAround[i] = 0; }
             }
-            int totalGridNodes = pow(minimalSquare,dimSplit-1) + MPIdim[0];
+
+            int totalGridNodes = 1;
+            for (int i = 0; i < dim; i++) {
+                totalGridNodes *= MPIdim[i];
+            }
 
             //calculate the size of the domains
             vector<int> standardCellSize(dim);
@@ -784,19 +830,24 @@ class TargetSpace {
             MPI_Comm_split(MPI_COMM_WORLD, globalId == 0, 0, &COMM_NEW);
             if(globalId == 0){
                 // recieve the topology YAY!
-                int positions[totalNo-1];
-                {
-                for(int i = 0; i < totalNo; i++) {
+                int positions[totalGridNodes];
+                bool final[totalGridNodes];
+                for(int i = 0; i < totalGridNodes; i++) {
                     int localPos[dim];
-                    MPI_Recv(&localPos, dim, MPI_INT, i, 9, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(&localPos, dim, MPI_INT, i+1, 9, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-                    int point = localPos[0];
+                    int point = localPos[0]*standardCellSize[0];
                     int multiplier = 1;
                     for (int i = 1; i < dim; i++) {
-                        multiplier *= MPIdim[i - 1];
-                        point += localPos[i] * multiplier;
+                        multiplier *= size[i - 1];
+                        point += localPos[i]*standardCellSize[i] * multiplier;
                     }
-                    positions[point] = i;
+                    positions[i] = point;
+                    if(localPos[0]>=MPIdim[1]){
+                        final[i] = true;
+                    }else{
+                        final[i]=false;
+                    }
                 }
 
                 // calculate the domain vectors (for both standard and final cells)
@@ -804,97 +855,66 @@ class TargetSpace {
                     vector<int> standardDerivedDomain;
                     vector<int> finalDataDomain;
                     vector<int> finalDerivedDomain;
-                    {
-                        vector<int> pos(dim);
-                        int totalSize = 1.0;
-                        int point;
-                        for (int j = 0; j < dim; j++) { pos[j] = 0; totalSize *= standardCellSize[j];}
-                        for (int i = 0; i < totalSize; i++) {
-                            //porgress the pos value using the limiter of domain
-                            if (i > 0) {
-                                addOne(pos, standardCellSize);
-                            }
-                            //calculate the corresponding 1-dim value (bear in mind the different limits!
-                            point = pos[0];
-                            int multiplier = 1;
-                            for (int i = 1; i < dim; i++) {
-                                multiplier *= size[i - 1];
-                                point += pos[i] * multiplier;
-                            }
-                            //add the points to the corresponding vectors
-                            vector<int> temp_size = size;
-                            size = standardCellSize;
-                            if (inBoundary(pos)) {
-                                standardDataDomain.push_back(point);
-                            }
-                            size = temp_size;
-                            standardDerivedDomain.push_back(point);
-                        }
+                    getDomain(standardCellSize,&standardDataDomain,&standardDerivedDomain);
+                    getDomain(finalCellSize,&finalDataDomain,&finalDerivedDomain);
 
-                        for (int j = 0; j < dim; j++) { pos[j] = 0; totalSize *= finalCellSize[j];}
-                        for (int i = 0; i < totalSize; i++) {
-                            //porgress the pos value using the limiter of domain
-                            if (i > 0) {
-                                addOne(pos, finalCellSize);
-                            }
-                            //calculate the corresponding 1-dim value (bear in mind the different limits!
-                            point = pos[0];
-                            int multiplier = 1;
-                            for (int i = 1; i < dim; i++) {
-                                multiplier *= size[i - 1];
-                                point += pos[i] * multiplier;
-                            }
-                            //add the points to the corresponding vectors
-                            vector<int> temp_size = size;
-                            for(int j = 0; j < dim; j++){size[j] = finalCellSize[j];}
-                            if (inBoundary(pos)) {
-                                finalDataDomain.push_back(point);
-                            }
-                            size = temp_size;
-                            finalDerivedDomain.push_back(point);
-                        }
-                    }
                     //split the grid and send the various data to the slaves:
-                    for(int i = 0; i < totalGridNodes; i++){
-
-
-
-
-
-
-
+                    for(int no = 0; no < totalGridNodes; no++){
+                        if(final[no]){ fields.MPICommDomain(no, points[no], finalDerivedDomain, finalDerivedDomain, 0, true, sendDerivative, sendDynamic);}
+                        else{ fields.MPICommDomain(no, points[no], standardDerivedDomain, standardDerivedDomain, 0, true, sendDerivative, sendDynamic);}
                     }
 
-
-
-
-                    value[0] = in;
-                    for(int i = 0; i < dim-1; i++) {
-                        value[i+1] = 0;
-                        if (value[i] >= size[i]){
-                            value[i+1] = value[i]/size[i];
-                            value[i] = value[i]%size[i];
+                    for(int loop = 0; loop < iterations; loop++) {
+                        //recieve data for outputs
+                        energy = 0;
+                        /* reduce energy values with master node contributing 0 */
+                        if(loop%oftenPrint==0) {
+                            cout << loop << ":" << " energy = " << energy << "\n";
                         }
+                        if(cutKinetic){
+                            if(oldEnergy >= energy){
+                                cutCount++;
+                                if(cutCount%often == 0){dt *= cutFactor*dt;cutCount = 0;}
+                            }
+                            /* Broadcast dt */
+                            oldEnergy = energy;
+                        }
+                        if(loop%oftenOutput==0){
+                            for(int no = 0; no < totalGridNodes; no++){
+                                // Pull in the fields and then save them to the supplied temp file
+                                if(final[no]){ fields.MPICommDomain(no, points[no], finalDerivedDomain, finalDerivedDomain, 0, false, sendDerivative, sendDynamic);}
+                                else{ fields.MPICommDomain(no, points[no], standardDerivedDomain, standardDerivedDomain, 0, false, sendDerivative, sendDynamic);}
+                            }
+                            save(tempFile);
+                            if(plot){
+                                updateEnergy();
+                                updateCharge();
+                                plot(plotFile);
+                            }
+                        }
+
                     }
-
-                    positions[]
-
-                }
 
             }else{
                 MPI_Comm COMM_GRID;
                 MPI_Cart_create(COMM_NEW, dim, MPIdim, wrapAround, 1, &COMM_GRID);
 
                 //communicate where you are in the grid to the master node
-                int mypos[dim];
+                int mypos[dim];/* get the position from the virtual topology */
                 MPI_Send(&mypos,dim,MPI_INT, 0, 9, MPI_COMM_WORLD);
                 MPI_Barrier(COMM_NEW);
-                MPI_Recv(&updated, 1, MPI_INT, no, loop, MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE)
+
+                //now recieve your initial data
+                fields.MPICommDomain(0,0,derivativeDomain,derivativeDomain,0,false,sendDerivative,sendDynamic);
+
+                //run main loop
+                for(int loop = 0; loop < iterations; loop++){
+                    (this->*localFunction)(localIterations,1,1,false);
+                    if(loop%oftenBoundary == 0) {
+                        sendRecvBoundaries(&COMM_GRID, &dataDomain, &derivedDomain);
+                    }
+                }
             }
-
-
-            //upload inital data to the
 
         }
         else{
