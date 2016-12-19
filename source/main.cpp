@@ -7,7 +7,7 @@ int main(int argc, char * argv[]) {
     double c1 = 0.141;
     double c2 = 0.198;
 
-    int choice = -1;
+    int choice = 0;
 
     Eigen::initParallel();
 
@@ -43,7 +43,7 @@ int main(int argc, char * argv[]) {
         my_model.updateCharge();
         cout << "the loaded model with added vector meson has energy = " << my_model.getEnergy() << " and charge = " << my_model.getCharge() << "\n";
         Timer tmr;
-        my_model.annealing(10000, 1000000, 1);
+        my_model.annealing(10000, 1000000, 2);
         cout << "10 loops finished in " << tmr.elapsed() << " sec\n";
         my_model.save("temp_field");
     }

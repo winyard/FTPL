@@ -401,7 +401,7 @@ class TargetSpace {
         CUDA_HOSTDEV Field<double> * addField(int dim, vector<int> size, Field<double> * target, bool isDynamic, bool isNormalised);
         CUDA_HOSTDEV Field<int> * addField(int dim, vector<int> size, Field<int> * target, bool isDynamic, bool isNormalised);
         CUDA_HOSTDEV Field<Eigen::MatrixXd> * addField(int dim, vector<int> size, Field<Eigen::MatrixXd> * target, bool isDynamic, bool isNormalised);
-        CUDA_HOSTDEV void MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send,bool doubleDerivative = true);
+        CUDA_HOSTDEV void MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send,int doubleDerivatives = 2, bool sendDynamic = false);
         CUDA_HOSTDEV void resize(vector<int> sizein);
         CUDA_HOSTDEV void load_fields(ifstream& loadfile, int totalSize);
         CUDA_HOSTDEV void save_fields(ofstream& savefile, int totalSize);
@@ -468,7 +468,7 @@ class TargetSpace {
         CUDA_HOSTDEV void printParameters();
         CUDA_HOSTDEV void setMetricType(string type);
         CUDA_HOSTDEV bool annealing(int iterations, int often, int often_cut, bool output = true);
-        CUDA_HOSTDEV void getDomain(vector<int> dimensions, vector<int> * target, vector<int>* targetBoundaries);
+        CUDA_HOSTDEV void getDomain(vector<int> dimensions, vector<int> * target, vector<int> * targetBoundaries);
         template <class T>
         CUDA_HOSTDEV inline T single_time_derivative(Field<T> * f, int wrt, int &point) __attribute__((always_inline))  ;
         template <class T>
@@ -476,9 +476,11 @@ class TargetSpace {
         template <class T>
         CUDA_HOSTDEV inline T double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) __attribute__((always_inline)) ;
         CUDA_HOSTDEV double getCharge(){return charge;};
-        CUDA_HOSTDEV void MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize = {}, bool doubleDerivative = true);
+        CUDA_HOSTDEV void MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, int * parameters, int sendDerivative = 2, bool sendDynamic = false, vector<int> domainSize = {});
         CUDA_HOSTDEV void MPIAnnealing(int iterations, int localIterations, int localPoints, int often, int often_cut);
         CUDA_HOSTDEV inline void addOne(vector<int>& pos, vector<int> limits, int component = 0);
+        CUDA_HOSTDEV int * calculateSplitting(int dimension, int noNodes);
+        CUDA_HOSTDEV inline void sendRecvBoundaries(MPI_Comm * COMM_GRID,vector<int> * dataDomain,vector<int> * derivedDomain);
     protected:
         int metric_type = 0;
         template <class T>
@@ -501,7 +503,16 @@ class TargetSpace {
         vector<string> parameterNames;
     };
 
-    void BaseFieldTheory::getDomain(vector<int> dimensions, vector<int> target, vector<int> targetBoundaries) {
+    void BaseFieldTheory::plot(const char *plotpath) {
+        cout << "ERROR!!! - Plot function not yet written, please correct in code!\n";
+    }
+
+    void BaseFieldTheory::sendRecvBoundaries(MPI_Comm *COMM_GRID, vector<int> *dataDomain,
+                                             vector<int> *derivedDomain) {
+        cout << "ERROR!! - sendRecvBOundaries function not yet written, please correct code!\n";
+    }
+
+    void BaseFieldTheory::getDomain(vector<int> dimensions, vector<int> * target, vector<int> * targetBoundaries) {
         vector<int> pos(dim);
         int totalSize = 1;
         int point;
@@ -522,8 +533,8 @@ class TargetSpace {
             vector<int> temp_size = size;
             size = dimensions; // temporarily set the size of the theory to get the correct boundary values
             if (inBoundary(pos)) {
-                target.push_back(point);
-            }else{targetBoundaries.push_back(point);}
+                target->push_back(point);
+            }else{targetBoundaries->push_back(point);}
             size = temp_size;
         }
     }
@@ -548,7 +559,8 @@ class TargetSpace {
         double oldEnergy = energy;
         int check = 0;
         for(int no = 0; no < iterations; no++) {
-            MPIFunction(&BaseFieldTheory::annealing, dim, often, localIterations, domainSize, false);
+            int parameters[2];
+            MPIFunction(&BaseFieldTheory::annealing, dim, often, localIterations, parameters, 0, false, domainSize);
             //sum up the energydensity
             if(MPI::COMM_WORLD.Get_rank()==0) {
                 //fields.storeDerivatives(this,false);
@@ -589,47 +601,61 @@ class TargetSpace {
         }
     }
 
-    void TargetSpace::MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send,bool doubleDerivative){
+    void TargetSpace::MPICommDomain(int partner,int point,vector<int> dataDomain,vector<int> derivativeDomain,int tag,bool send,int sendDerivatives, bool sendDynamic){
         for(int no = 0; no < fields1.size(); no++){
             for(int i = 0; i < dataDomain.size(); i++) {
                 if (send) {
                     MPI_Send(fields1[no]->data[point + dataDomain[i]].data(),
-                             fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag, MPI_COMM_WORLD);
+                             fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag+i, MPI_COMM_WORLD);
+                    if(sendDynamic){
+                        MPI_Send(fields1[no]->dt[point + dataDomain[i]].data(),
+                                 fields1[no]->dt[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag+100+i, MPI_COMM_WORLD);
+                    }
                 } else {
                     MPI_Recv(fields1[no]->data[point + dataDomain[i]].data(),
-                             fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-
+                             fields1[no]->data[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag+i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(sendDynamic){
+                        MPI_Recv(fields1[no]->dt[point + dataDomain[i]].data(),
+                                 fields1[no]->dt[point + dataDomain[i]].size(), MPI_DOUBLE, partner, tag+100+i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    }
                 }
             }
-            for(int i = 0; i < derivativeDomain.size(); i++) {
-                if(send) {
-                    for(int wrt1 = 0; wrt1 < fields1[no]->dim; wrt1++) {
-                        MPI_Send(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
-                                 fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, i*(tag+10)+wrt1,
-                                 MPI_COMM_WORLD);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Send(
-                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(),
-                                        MPI_DOUBLE, partner, i*(tag+10)+fields1[no]->dim+wrt1+wrt2,
-                                        MPI_COMM_WORLD);
+            if(sendDerivatives > 0) {
+                for (int i = 0; i < derivativeDomain.size(); i++) {
+                    if (send) {
+                        for (int wrt1 = 0; wrt1 < fields1[no]->dim; wrt1++) {
+                            MPI_Send(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                     fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(),
+                                     MPI_DOUBLE, partner, i * (tag + 10) + wrt1,
+                                     MPI_COMM_WORLD);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Send(
+                                            fields1[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].data(),
+                                            fields1[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].size(),
+                                            MPI_DOUBLE, partner, i * (tag + 10) + fields1[no]->dim + wrt1 + wrt2,
+                                            MPI_COMM_WORLD);
+                                }
                             }
                         }
-                    }
-                }else{
-                    for(int wrt1 = 0; wrt1 < fields1[no]->dim; wrt1++) {
-                        MPI_Recv(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
-                                 fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(), MPI_DOUBLE, partner, i*(tag+10)+wrt1,
-                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Recv(
-                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                        fields1[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].size(),
-                                        MPI_DOUBLE, partner, i*(tag+10)+fields1[no]->dim+wrt1+wrt2,
-                                        MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    } else {
+                        for (int wrt1 = 0; wrt1 < fields1[no]->dim; wrt1++) {
+                            MPI_Recv(fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                     fields1[no]->single_derivatives[wrt1][point + derivativeDomain[i]].size(),
+                                     MPI_DOUBLE, partner, i * (tag + 10) + wrt1,
+                                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Recv(
+                                            fields1[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].data(),
+                                            fields1[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].size(),
+                                            MPI_DOUBLE, partner, i * (tag + 10) + fields1[no]->dim + wrt1 + wrt2,
+                                            MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                                }
                             }
                         }
                     }
@@ -642,35 +668,45 @@ class TargetSpace {
                 if(send) {
                     MPI_Send(&fields2[no]->data[point + dataDomain[i]],
                              1, MPI_DOUBLE,partner,tag,MPI_COMM_WORLD);
+                    if(sendDynamic){
+                        MPI_Send(&fields2[no]->dt[point + dataDomain[i]],
+                                 1, MPI_DOUBLE,partner,tag,MPI_COMM_WORLD);
+                    }
                 }else{
                     MPI_Recv(&fields2[no]->data[point + dataDomain[i]],
                              1, MPI_DOUBLE,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                    if(sendDynamic){
+                        MPI_Recv(&fields2[no]->dt[point + dataDomain[i]],
+                                 1, MPI_DOUBLE,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                    }
                 }
             }
-            for(int i = 0; i < derivativeDomain.size(); i++) {
-                if(send) {
-                    for(int wrt1 = 0; wrt1 < fields2[no]->dim; wrt1++) {
-                        MPI_Send(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
-                                 1, MPI_DOUBLE, partner, tag,
-                                 MPI_COMM_WORLD);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Send(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                         1, MPI_DOUBLE, partner, tag,
-                                         MPI_COMM_WORLD);
+            if(sendDerivatives > 0) {
+                for (int i = 0; i < derivativeDomain.size(); i++) {
+                    if (send) {
+                        for (int wrt1 = 0; wrt1 < fields2[no]->dim; wrt1++) {
+                            MPI_Send(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                     1, MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Send(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                             1, MPI_DOUBLE, partner, tag,
+                                             MPI_COMM_WORLD);
+                                }
                             }
                         }
-                    }
-                }else{
-                    for(int wrt1 = 0; wrt1 < fields2[no]->dim; wrt1++) {
-                        MPI_Recv(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
-                                 1, MPI_DOUBLE, partner, tag,
-                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Recv(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                         1, MPI_DOUBLE, partner, tag,
-                                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    } else {
+                        for (int wrt1 = 0; wrt1 < fields2[no]->dim; wrt1++) {
+                            MPI_Recv(&fields2[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                     1, MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Recv(&fields2[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                             1, MPI_DOUBLE, partner, tag,
+                                             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                                }
                             }
                         }
                     }
@@ -682,35 +718,45 @@ class TargetSpace {
                 if(send) {
                     MPI_Send(&fields3[no]->data[point + dataDomain[i]],
                              1, MPI_INT,partner,tag,MPI_COMM_WORLD);
+                    if(sendDynamic){
+                        MPI_Send(&fields3[no]->dt[point + dataDomain[i]],
+                                 1, MPI_INT,partner,tag,MPI_COMM_WORLD);
+                    }
                 }else{
                     MPI_Recv(&fields3[no]->data[point + dataDomain[i]],
                              1, MPI_INT,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                    if(sendDynamic){
+                        MPI_Recv(&fields3[no]->dt[point + dataDomain[i]],
+                                 1, MPI_INT,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                    }
                 }
             }
-            for(int i = 0; i < derivativeDomain.size(); i++) {
-                if(send) {
-                    for(int wrt1 = 0; wrt1 < fields3[no]->dim; wrt1++) {
-                        MPI_Send(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
-                                 1, MPI_INT, partner, tag,
-                                 MPI_COMM_WORLD);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Send(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                         1, MPI_INT, partner, tag,
-                                         MPI_COMM_WORLD);
+            if(sendDerivatives > 0) {
+                for (int i = 0; i < derivativeDomain.size(); i++) {
+                    if (send) {
+                        for (int wrt1 = 0; wrt1 < fields3[no]->dim; wrt1++) {
+                            MPI_Send(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                     1, MPI_INT, partner, tag,
+                                     MPI_COMM_WORLD);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Send(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                             1, MPI_INT, partner, tag,
+                                             MPI_COMM_WORLD);
+                                }
                             }
                         }
-                    }
-                }else{
-                    for(int wrt1 = 0; wrt1 < fields3[no]->dim; wrt1++) {
-                        MPI_Recv(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
-                                 1, MPI_INT, partner, tag,
-                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Recv(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
-                                         1, MPI_INT, partner, tag,
-                                         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    } else {
+                        for (int wrt1 = 0; wrt1 < fields3[no]->dim; wrt1++) {
+                            MPI_Recv(&fields3[no]->single_derivatives[wrt1][point + derivativeDomain[i]],
+                                     1, MPI_INT, partner, tag,
+                                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Recv(&fields3[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]],
+                                             1, MPI_INT, partner, tag,
+                                             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                                }
                             }
                         }
                     }
@@ -722,43 +768,61 @@ class TargetSpace {
                 if(send) {
                     MPI_Send(fields4[no]->data[point + dataDomain[i]].data(),
                              fields4[no]->data[point + dataDomain[i]].cols()*fields4[no]->data[point + dataDomain[i]].rows(), MPI_DOUBLE,partner,tag,MPI_COMM_WORLD);
+                    if(sendDynamic){
+                        MPI_Send(fields4[no]->dt[point + dataDomain[i]].data(),
+                                 fields4[no]->dt[point + dataDomain[i]].cols()*fields4[no]->dt[point + dataDomain[i]].rows(), MPI_DOUBLE,partner,tag,MPI_COMM_WORLD);
+                    }
                 }else{
                     MPI_Recv(fields4[no]->data[point + dataDomain[i]].data(),
                              fields4[no]->data[point + dataDomain[i]].cols()*fields4[no]->data[point + dataDomain[i]].rows(), MPI_DOUBLE,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                    if(sendDynamic){
+                        MPI_Recv(fields4[no]->dt[point + dataDomain[i]].data(),
+                                 fields4[no]->dt[point + dataDomain[i]].cols()*fields4[no]->dt[point + dataDomain[i]].rows(), MPI_DOUBLE,partner,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                    }
                 }
             }
-            for(int i = 0; i < derivativeDomain.size(); i++) {
-                if(send) {
-                    for(int wrt1 = 0; wrt1 < fields4[no]->dim; wrt1++) {
-                        MPI_Send(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
-                                 fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols()*fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows(), MPI_DOUBLE, partner, tag,
-                                 MPI_COMM_WORLD);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Send(
-                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                        fields4[no]->double_derivatives[wrt2][wrt1][point +
-                                                                                    derivativeDomain[i]].cols() *
-                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(),
-                                        MPI_DOUBLE, partner, tag,
-                                        MPI_COMM_WORLD);
+            if(sendDerivatives > 0) {
+                for (int i = 0; i < derivativeDomain.size(); i++) {
+                    if (send) {
+                        for (int wrt1 = 0; wrt1 < fields4[no]->dim; wrt1++) {
+                            MPI_Send(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                     fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols() *
+                                     fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows(),
+                                     MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Send(
+                                            fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].data(),
+                                            fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].cols() *
+                                            fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].rows(),
+                                            MPI_DOUBLE, partner, tag,
+                                            MPI_COMM_WORLD);
+                                }
                             }
                         }
-                    }
-                }else{
-                    for(int wrt1 = 0; wrt1 < fields4[no]->dim; wrt1++) {
-                        MPI_Recv(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
-                                 fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows()*fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols(), MPI_DOUBLE, partner, tag,
-                                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-                        if(doubleDerivative) {
-                            for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
-                                MPI_Recv(
-                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].data(),
-                                        fields4[no]->double_derivatives[wrt2][wrt1][point +
-                                                                                    derivativeDomain[i]].cols() *
-                                        fields4[no]->double_derivatives[wrt2][wrt1][point + derivativeDomain[i]].rows(),
-                                        MPI_DOUBLE, partner, tag,
-                                        MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    } else {
+                        for (int wrt1 = 0; wrt1 < fields4[no]->dim; wrt1++) {
+                            MPI_Recv(fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].data(),
+                                     fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].rows() *
+                                     fields4[no]->single_derivatives[wrt1][point + derivativeDomain[i]].cols(),
+                                     MPI_DOUBLE, partner, tag,
+                                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                            if (sendDerivatives == 2) {
+                                for (int wrt2 = 0; wrt2 <= wrt1; wrt2++) {
+                                    MPI_Recv(
+                                            fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].data(),
+                                            fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].cols() *
+                                            fields4[no]->double_derivatives[wrt2][wrt1][point +
+                                                                                        derivativeDomain[i]].rows(),
+                                            MPI_DOUBLE, partner, tag,
+                                            MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                                }
                             }
                         }
                     }
@@ -769,23 +833,23 @@ class TargetSpace {
     }
 
     int * BaseFieldTheory::calculateSplitting(int dimension, int noNodes) {
-
-        int minimalSquare = (int) floor(exp((1.0 / dimSplit) * log(totalNo - 1)));
-        int leftover = totalNo - pow(minimalSquare, dimSplit);
+        int MPIdim[dimension];
+        int minimalSquare = (int) floor(exp((1.0 / dimension) * log(noNodes)));
+        int leftover = noNodes - pow(minimalSquare, dimension);
         for (int i = 0; i < dim; i++) {
             MPIdim[i] = minimalSquare;
         }
-        MPIdim[0] += (int) floor(exp((1.0 / (dimSplit - 1)) * log(leftover)));
+        MPIdim[0] += (int) floor(exp((1.0 / (dimension - 1)) * log(leftover)));
         cout << "the selected topology is ";
         for (int i = 0; i < dim; i++) {
             if (i != 0) { cout << "x"; }
             cout << MPIdim[i];
         }
         cout << "\n";
-        cout << "there are " << totalNo - pow(minimalSquare, dimSplit - 1) - MPIdim[0]
-             << " unused nodes out of a total of " << totalNo << " which is "
-             << 100.0 * (totalNo - pow(minimalSquare, dimSplit - 1) - MPIdim[0]) / totalNo << "%\n";
-        if (totalNo - pow(minimalSquare, dimSplit - 1) - MPIdim[0] != 0) {
+        cout << "there are " << noNodes - pow(minimalSquare, dimension - 1) - MPIdim[0]
+             << " unused nodes out of a total of " << noNodes << " which is "
+             << 100.0 * (noNodes - pow(minimalSquare, dimension - 1) - MPIdim[0]) / noNodes << "%\n";
+        if (noNodes - pow(minimalSquare, dimension - 1) - MPIdim[0] != 0) {
             cout
                     << "would suggest exiting and rerunning code with correct number of nodes! - but hey, I'm not your mother\n";
         }
@@ -793,17 +857,16 @@ class TargetSpace {
         return MPIdim;
     }
 
-void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, vector<int> domainSize, bool doubleDerivative) {
+void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, int, int, bool), int dimSplit, int loops, int localIterations, int * parameters, int sendDerivatives, bool sendDynamic, vector<int> domainSize) {
         int globalId = MPI::COMM_WORLD.Get_rank();
         int totalNo = MPI::COMM_WORLD.Get_size();
 
         if(domainSize.empty()) {
             //Split function equally across the grid
             //calculate the grid splitting
-            int MPIdim[dim];
             int wrapAround[dim];
 
-            MPIdim = calculateSplitting(dim, totalNo - 1);
+            int* MPIdim = calculateSplitting(dim, totalNo - 1);
 
             //setting the boundary types
             for (int i = 0; i < dim; i++) {
@@ -858,35 +921,42 @@ void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, in
                     getDomain(standardCellSize,&standardDataDomain,&standardDerivedDomain);
                     getDomain(finalCellSize,&finalDataDomain,&finalDerivedDomain);
 
+                    //calculate the starting points for each node
+
                     //split the grid and send the various data to the slaves:
                     for(int no = 0; no < totalGridNodes; no++){
-                        if(final[no]){ fields.MPICommDomain(no, points[no], finalDerivedDomain, finalDerivedDomain, 0, true, sendDerivative, sendDynamic);}
-                        else{ fields.MPICommDomain(no, points[no], standardDerivedDomain, standardDerivedDomain, 0, true, sendDerivative, sendDynamic);}
+                        if(final[no]){ fields.MPICommDomain(no, positions[no], finalDerivedDomain, finalDerivedDomain, 0, true, sendDerivatives, sendDynamic);}
+                        else{ fields.MPICommDomain(no, positions[no], standardDerivedDomain, standardDerivedDomain, 0, true, sendDerivatives, sendDynamic);}
                     }
-
-                    for(int loop = 0; loop < iterations; loop++) {
+                    double oldEnergy = 100000000.0;
+                    int cutCount = 0;
+                    double cutFactor = 0.95;
+                    const char * tempFile = "MPItemp_field";
+                    const char * plotFile = "MPIplot";
+                    for(int loop = 0; loop < loops; loop++) {
                         //recieve data for outputs
                         energy = 0;
                         /* reduce energy values with master node contributing 0 */
-                        if(loop%oftenPrint==0) {
+                        //parameters are 0 - oftenPrint, 1 - cutKinetic/cutCount, 2- outputoften, 3 plot?
+                        if(loop%parameters[0]==0) {
                             cout << loop << ":" << " energy = " << energy << "\n";
                         }
-                        if(cutKinetic){
-                            if(oldEnergy >= energy){
+                        if(parameters[1] > 0){
+                            if(oldEnergy <= energy){
                                 cutCount++;
-                                if(cutCount%often == 0){dt *= cutFactor*dt;cutCount = 0;}
+                                if(cutCount%parameters[1] == 0){dt *= cutFactor*dt;cutCount = 0;}
                             }
                             /* Broadcast dt */
                             oldEnergy = energy;
                         }
-                        if(loop%oftenOutput==0){
+                        if(loop%parameters[2]==0){
                             for(int no = 0; no < totalGridNodes; no++){
                                 // Pull in the fields and then save them to the supplied temp file
-                                if(final[no]){ fields.MPICommDomain(no, points[no], finalDerivedDomain, finalDerivedDomain, 0, false, sendDerivative, sendDynamic);}
-                                else{ fields.MPICommDomain(no, points[no], standardDerivedDomain, standardDerivedDomain, 0, false, sendDerivative, sendDynamic);}
+                                if(final[no]){ fields.MPICommDomain(no, positions[no], finalDerivedDomain, finalDerivedDomain, 0, false, sendDerivatives, sendDynamic);}
+                                else{ fields.MPICommDomain(no, positions[no], standardDerivedDomain, standardDerivedDomain, 0, false, sendDerivatives, sendDynamic);}
                             }
                             save(tempFile);
-                            if(plot){
+                            if(parameters[3] == 1){
                                 updateEnergy();
                                 updateCharge();
                                 plot(plotFile);
@@ -904,14 +974,18 @@ void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, in
                 MPI_Send(&mypos,dim,MPI_INT, 0, 9, MPI_COMM_WORLD);
                 MPI_Barrier(COMM_NEW);
 
+                vector<int> derivativeDomain;
+                vector<int> dataDomain;
+
                 //now recieve your initial data
-                fields.MPICommDomain(0,0,derivativeDomain,derivativeDomain,0,false,sendDerivative,sendDynamic);
+                fields.MPICommDomain(0,0,derivativeDomain,derivativeDomain,0,false,sendDerivatives,sendDynamic);
 
                 //run main loop
-                for(int loop = 0; loop < iterations; loop++){
+                for(int loop = 0; loop < loops; loop++){
                     (this->*localFunction)(localIterations,1,1,false);
-                    if(loop%oftenBoundary == 0) {
-                        sendRecvBoundaries(&COMM_GRID, &dataDomain, &derivedDomain);
+                    // parameters - 4 oftenBoundary
+                    if(loop%parameters[4] == 0) {
+                        sendRecvBoundaries(&COMM_GRID, &dataDomain, &derivativeDomain);
                     }
                 }
             }
@@ -966,12 +1040,12 @@ void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, in
                             MPI_Recv(&updated, 1, MPI_INT, no, loop, MPI_COMM_WORLD,
                                      MPI_STATUS_IGNORE);//recieve if the point has been updated
                             if (updated == 1) {
-                                fields.MPICommDomain(no, points[no], dataDomain, derivedDomain, loop, false, false);
+                                fields.MPICommDomain(no, points[no], dataDomain, derivedDomain, loop, false, sendDerivatives, sendDynamic);
                                 MPICommEnergy(no, points[no], derivedDomain, loop, false);
                             }
                             int pos = p_rand(mt);// correct to right random no. generator
                             points[no] = pos;
-                            fields.MPICommDomain(no, pos, derivedDomain, derivedDomain, loop, true, false);
+                            fields.MPICommDomain(no, pos, derivedDomain, derivedDomain, loop, true, sendDerivatives, sendDynamic);
                             MPICommEnergy(no, pos, derivedDomain, loop, true);
                         }
                         #pragma omp barrier
@@ -985,10 +1059,10 @@ void BaseFieldTheory::MPIFunction(bool (BaseFieldTheory::*localFunction)(int, in
                 for(int loop = 0; loop < loops; loop++){
                     MPI_Send(&updated,1,MPI_INT,0,loop,MPI_COMM_WORLD);
                     if(updated == 1){
-                            fields.MPICommDomain(0,0,dataDomain,derivedDomain,loop,true,false);
+                            fields.MPICommDomain(0,0,dataDomain,derivedDomain,loop,true,sendDerivatives,sendDynamic);
                             MPICommEnergy(0,0,derivedDomain,loop,true);
                     }
-                    fields.MPICommDomain(0,0,derivedDomain,derivedDomain,loop,false,false);
+                    fields.MPICommDomain(0,0,derivedDomain,derivedDomain,loop,false,sendDerivatives, sendDynamic);
                     MPICommEnergy(0,0,derivedDomain,loop,false);
                     updated = (this->*localFunction)(localIterations, 1, 1, false);
                 }
