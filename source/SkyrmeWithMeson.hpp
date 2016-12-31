@@ -117,7 +117,7 @@ namespace FTPL {
              + c2*(fx.squaredNorm()*(fy.squaredNorm()+fz.squaredNorm()) + fy.squaredNorm()*fz.squaredNorm()
              - fx.dot(fy)*fx.dot(fy) - fx.dot(fz)*fx.dot(fz) - fy.dot(fz)*fy.dot(fz) ) + mpi*mpi*(1.0 - f->data[pos][0]);
 
-        energy -= 1.0*B;
+        energy += 1.0*((2.0*M_PI*M_PI)*1.0/(spacing[0]*spacing[1]*spacing[2]*(size[0]-4)*(size[1]-4)*(size[2]-4)) - B);
 
         if(withVector){
 
