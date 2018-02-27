@@ -17,6 +17,9 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 FIND_PACKAGE(CUDA REQUIRED)
 INCLUDE(FindCUDA)
 INCLUDE_DIRECTORIES(/usr/local/cuda/include)
+find_package(Boost REQUIRED)
+include_directories(${Boost_INCLUDE_DIRS})
+message("found boost at ${Boost_INCLUDE_DIRS}")
 
 ##################################
 # Check for c++14 compiler support
@@ -40,6 +43,7 @@ foreach(flag ${ENABLE_CXXFLAGS_TO_CHECK})
     check_cxx_compiler_flag("${flag}" COMPILER_HAS_CXX_FLAG${flag_var})
     if(COMPILER_HAS_CXX_FLAG${flag_var})
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flag}")
+	message("Found compiler: ${flag}")
         break()
     endif()
 endforeach()
@@ -95,7 +99,7 @@ list(REMOVE_DUPLICATES FTPL_INCLUDE_DIRS)
 LIST(APPEND CUDA_NVCC_FLAGS --compiler-options -fno-strict-aliasing -lineinfo -use_fast_math -Xptxas -dlcm=cg)
 
 include_directories(${FTPL_INCLUDE_DIRS})
-add_executable(FTPL ${FTPL_SOURCES} ${FTPL_PLOT_SOURCES} source_plot/plots.hpp)
+add_executable(FTPL ${FTPL_SOURCES} ${FTPL_PLOT_SOURCES} source_plot/plots.hpp source/Vorticies.hpp source/CompactVorticieswMetric.hpp source/CompactVorticies.hpp source/Monopoles.hpp source/Monopoles2.hpp source/ExtendedHopfions.hpp)
 
 target_link_libraries(FTPL ${VTK_LIBRARIES})
 target_link_libraries(lbmslv /usr/local/cuda/lib64/libcudart.so ${MPI_LIBRARIES})

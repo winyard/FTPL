@@ -92,6 +92,7 @@ class Field {
 	    int dim;
         CUDA_HOSTDEV inline const T  __attribute__((always_inline)) getData( const vector<int> pos);
         CUDA_HOSTDEV inline void  __attribute__((always_inline)) setBuffer(const T value, vector<int> &pos);
+        CUDA_HOSTDEV inline int __attribute__((always_inline)) checkindex(int index);
         CUDA_HOSTDEV Field(int d, vector<int> size, bool isdynamic, bool isnormalised);
         CUDA_HOSTDEV ~Field(){};
         CUDA_HOSTDEV inline T operator()(...); // TO BE WRITTEN
@@ -114,11 +115,64 @@ class Field {
         CUDA_HOSTDEV void progressTime(double time_step);
         CUDA_HOSTDEV void update_derivatives(vector<double> spacing);
         CUDA_HOSTDEV inline void alter_point(int i, T value, vector<double> spacing, bool doubleDerivative);
+        CUDA_HOSTDEV void setboundarytype(vector<int> boundaryin, double boundaryconstantin = 1.0);
+        CUDA_HOSTDEV double getBoundaryConstant();
+        CUDA_HOSTDEV inline T __attribute__((always_inline)) rotate(int point, double winding);
+        //CUDA_HOSTDEV inline T morph(double winding, T object);
+        CUDA_HOSTDEV inline T morph(double winding, Eigen::Vector2d object);
+        CUDA_HOSTDEV inline T morph(double winding, double object);
         bool normalised;
+        vector<int> boundarytype; // indicates the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
+        double boundaryconstant;
+        int boundarymorphtype;
     protected:
 		vector<int>  size;
         vector<vector<T>> k_sum;
 };
+    template<class T>//due to awkward types being passed about
+    T Field<T>::morph(double winding, double object) {
+        cout << "THIS IS THE WRONG TYPE FOR A 2d ROTATION ETC!!!\n";
+        return object;
+    }
+
+    /*template<class T>//due to awkward types being passed about
+    T Field<T>::morph(double winding, T object) {
+        cout << "THIS IS THE WRONG TYPE FOR A 2d ROTATION ETC!!!\n";
+        return object;
+    }*/
+
+    template<class T>//due to awkward types being passed about
+    T Field<T>::morph(double winding, Eigen::Vector2d object) {
+        //cout << "morphed as 2d correctly\n";
+        if(boundarymorphtype == 1){
+            Eigen::Vector2d test2;
+            test2[0] = 0.0;
+            test2[1] = winding;
+            return object + test2;
+        }
+        else{
+            Eigen::Matrix2d rot;
+            rot << cos(winding), -sin(winding), sin(winding), cos(winding);
+            return rot*object;
+        }
+    }
+
+    template<class T>
+    T Field<T>::rotate(int point, double winding){
+            return morph(winding,data[point]);
+    }
+
+    template<class T>
+    double Field<T>::getBoundaryConstant(){
+        return boundaryconstant;
+    }
+
+    template<class T>
+    void Field<T>::setboundarytype(vector<int> boundaryin, double boundaryconstantin){
+        if(boundaryin.size() == dim*2){boundarytype = boundaryin;}
+        else{cout << "boundary input is of wrong size, should be a vector<int> of size " << dim*2 << " 2 for each dimension\n";}
+        boundaryconstant = boundaryconstantin;
+    }
 
 template<class T>
     void Field<T>::alter_point(int i, T value, vector<double> spacing, bool doubleDerivative){
@@ -442,6 +496,7 @@ class TargetSpace {
         CUDA_HOSTDEV inline virtual void __attribute__((always_inline)) RK4calc(int i);
         CUDA_HOSTDEV inline virtual double __attribute__((always_inline)) metric(int i, int j, vector<double> pos = {0});
         CUDA_HOSTDEV inline void MPICommEnergy(int partner,int pos,vector<int> domain,int tag,bool send);
+        CUDA_HOSTDEV inline int periodicindex(int index);
         CUDA_HOSTDEV void RK4(int iterations, bool cutEnergy, int often); // TO BE WRITTEN
         CUDA_HOSTDEV void save(const char * savepath); // TO BE WRITTEN
         CUDA_HOSTDEV void load(const char * loadpath, bool message = true); // TO BE WRITTEN
@@ -449,7 +504,8 @@ class TargetSpace {
         CUDA_HOSTDEV void spaceTransformation(); // TO BE WRITTEN
         template <class T>
         CUDA_HOSTDEV void fieldTransformation(T tranformation); // TO BE WRITTEN
-        CUDA_HOSTDEV void setBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
+        CUDA_HOSTDEV void setAllBoundaryType(vector<int> boundaryin); // TO BE WRITTEN
+        CUDA_HOSTDEV void setbdw(vector<int> bdwin); // TO BE WRITTEN
         CUDA_HOSTDEV void setStandardMetric(string type);
         CUDA_HOSTDEV void updateEnergy(); // TO BE WRITTEN
         CUDA_HOSTDEV void updateCharge();
@@ -465,6 +521,7 @@ class TargetSpace {
         CUDA_HOSTDEV int getTotalSize();
         CUDA_HOSTDEV double getTotalSpacing();
         CUDA_HOSTDEV void plotEnergy();
+        CUDA_HOSTDEV void plotCharge();
         CUDA_HOSTDEV void printParameters();
         CUDA_HOSTDEV void setMetricType(string type);
         CUDA_HOSTDEV bool annealing(int iterations, int often, int often_cut, bool output = true);
@@ -481,6 +538,8 @@ class TargetSpace {
         CUDA_HOSTDEV inline void addOne(vector<int>& pos, vector<int> limits, int component = 0);
         CUDA_HOSTDEV int * calculateSplitting(int dimension, int noNodes);
         CUDA_HOSTDEV inline void sendRecvBoundaries(MPI_Comm * COMM_GRID,vector<int> * dataDomain,vector<int> * derivedDomain);
+        CUDA_HOSTDEV void virtual gradientCorrections(int loop);
+        CUDA_HOSTDEV void virtual correctTheory(int loop);
     protected:
         int metric_type = 0;
         template <class T>
@@ -488,7 +547,6 @@ class TargetSpace {
         //vector<unique_ptr<Field>> fields;
         TargetSpace fields;
         vector<int> bdw; // number of boundary points that are never updated or contribute to energies etc. in each direction
-        vector<int> boundarytype; // indicates the type of boundary in each direction 0-fixed(size = bdw), 1-dirichlet (dx = 0), 2-periodic
         vector<double> energydensity;
         double energy, potential, kinetic;
         vector<double> spacing;
@@ -501,7 +559,20 @@ class TargetSpace {
         bool setDerivatives = false;
         vector<double *> parameters;
         vector<string> parameterNames;
+        vector<int> boundarytype;
+        bool  normalise_me;
     };
+
+    void BaseFieldTheory::setAllBoundaryType(vector<int> boundaryin){
+        cout << "WARNING!!! - Boundary Conditions are still under construction!\n";
+        boundarytype = boundaryin;
+} // TO BE WRITTEN
+
+    void BaseFieldTheory::setbdw(vector<int> bdwin){
+        cout << "WARNING!!! - alternat bdw are still under construction!\n";
+        bdw = bdwin;
+        cout << "set\n";
+    } // TO BE WRITTEN
 
     void BaseFieldTheory::plot(const char *plotpath) {
         cout << "ERROR!!! - Plot function not yet written, please correct in code!\n";
@@ -1540,6 +1611,12 @@ Field<Eigen::MatrixXd> * TargetSpace::addField(int dim, vector<int> size, Field<
         parameterNames.push_back(name);
     }
 
+    int BaseFieldTheory::periodicindex(int index){
+        if(index < 0){return index + getTotalSize();}
+        else if(index >= getTotalSize()){return index - getTotalSize();}
+        else{return index;}
+    }
+
 bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool output){
     bool altered = false;
     if(dynamic && output){
@@ -1566,13 +1643,23 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
         int sep = getTotalSize()/omp_get_num_threads();
         double newEnergy;
         double oldEnergy;
-        double newEnergyDensity[1+2*dim+4*dim*dim];
+        double newEnergyDensity[1+4*dim+16*(dim-1)*(dim-1)];
         int store = 0;
-        std::uniform_int_distribution<int> p_rand(omp_get_thread_num()*sep,omp_get_thread_num()*sep + sep - 1 );
+        int area_start = omp_get_thread_num()*sep;
+        int area_end = omp_get_thread_num()*sep + sep - 1;
+        int area_length = area_end - area_start;
+        std::uniform_int_distribution<int> p_rand_left(area_start,area_start + area_length/2);
+        std::uniform_int_distribution<int> p_rand_right(area_start + area_length/2,area_end);
         while (no_total<iterations) {
             int pos = -1;
-            while (!inBoundary(pos)) {
-                pos = p_rand(mt);// correct to right random no. generator
+            if(no_total%2 == 0) {
+                while (!inBoundary(pos)) {
+                    pos = p_rand_left(mt);// correct to right random no. generator
+                }
+            }else{
+                while (!inBoundary(pos)) {
+                    pos = p_rand_right(mt);// correct to right random no. generator
+                }
             }
             int field = f_rand(mt); // correct for int random no. generator
             fields.randomise(pos, field, spacing, dt);
@@ -1596,8 +1683,22 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                     newEnergy += newEnergyDensity[store];
                     oldEnergy += energydensity[point];
                 }
+                store++;
+                point = pos + 2*mult1;
+                if (inBoundary(point)||!output) {
+                    newEnergyDensity[store] = calculateEnergy(point);
+                    newEnergy += newEnergyDensity[store];
+                    oldEnergy += energydensity[point];
+                }
+                store++;
+                point = pos - 2*mult1;
+                if (inBoundary(point)||!output) {
+                    newEnergyDensity[store] = calculateEnergy(point);
+                    newEnergy += newEnergyDensity[store];
+                    oldEnergy += energydensity[point];
+                }
                 double mult2 = 1.0;
-                for (int j = 0; j <= i; j++) {
+                for (int j = 0; j < i; j++) {
                     store++;
                     point = pos + mult1 + mult2;
                     if (inBoundary(point)||!output) {
@@ -1606,7 +1707,50 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                         oldEnergy += energydensity[point];
                     }
                     store++;
+                    point = pos + 2*mult1 + mult2;
+                    if (inBoundary(point)||!output) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+                    store++;
+                    point = pos + mult1 + 2*mult2;
+                    if (inBoundary(point)||!output) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+                    store++;
+                    point = pos + 2*mult1 + 2*mult2;
+                    if (inBoundary(point)||!output) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+
+                    store++;
                     point = pos - mult1 - mult2;
+                    if (inBoundary(point)||!output) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+                    store++;
+                    point = pos - 2*mult1 - mult2;
+                    if (inBoundary(point)||!output) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+                    store++;
+                    point = pos - mult1 - 2*mult2;
+                    if (inBoundary(point)||!output) {
+                        newEnergyDensity[store] = calculateEnergy(point);
+                        newEnergy += newEnergyDensity[store];
+                        oldEnergy += energydensity[point];
+                    }
+                    store++;
+                    point = pos - 2*mult1 - 2*mult2;
                     if (inBoundary(point)||!output) {
                         newEnergyDensity[store] = calculateEnergy(point);
                         newEnergy += newEnergyDensity[store];
@@ -1621,7 +1765,52 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                             oldEnergy += energydensity[point];
                         }
                         store++;
+                        point = pos + 2*mult1 - mult2;
+                        if (inBoundary(point)||!output) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+                        store++;
+                        point = pos + mult1 - 2*mult2;
+                        if (inBoundary(point)||!output) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+                        store++;
+                        point = pos + 2*mult1 - 2*mult2;
+                        if (inBoundary(point)||!output) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+
+
+
+                        store++;
                         point = pos - mult1 + mult2;
+                        if (inBoundary(point)||!output) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+                        store++;
+                        point = pos - 2*mult1 + mult2;
+                        if (inBoundary(point)||!output) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+                        store++;
+                        point = pos - mult1 + 2*mult2;
+                        if (inBoundary(point)||!output) {
+                            newEnergyDensity[store] = calculateEnergy(point);
+                            newEnergy += newEnergyDensity[store];
+                            oldEnergy += energydensity[point];
+                        }
+                        store++;
+                        point = pos - 2*mult1 + 2*mult2;
                         if (inBoundary(point)||!output) {
                             newEnergyDensity[store] = calculateEnergy(point);
                             newEnergy += newEnergyDensity[store];
@@ -1632,6 +1821,7 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                 }
             mult1 *= size[i];
             }
+            if(store >= 1+4*dim+16*(dim-1)*(dim-1)){cout << "ERRROR! - missmmatch of sizes for newEnergyDensity array to value of point variable!!!\n";}
             if (newEnergy > oldEnergy) { // add some heat term! :) - as well as some fall off
                 fields.derandomise(pos, field, spacing);
             } else {
@@ -1650,15 +1840,56 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                     if (inBoundary(point)||!output) {
                         energydensity[point] = newEnergyDensity[store];
                     }
+                    store++;
+                    point = pos + 2*mult1;
+                    if (inBoundary(point)||!output) {
+                        energydensity[point] = newEnergyDensity[store];
+                    }
+                    store++;
+                    point = pos - 2*mult1;
+                    if (inBoundary(point)||!output) {
+                        energydensity[point] = newEnergyDensity[store];
+                    }
                     double mult2 = 1.0;
-                    for (int j = 0; j <= i; j++) {
+                    for (int j = 0; j < i; j++) {
                         store++;
                         point = pos + mult1 + mult2;
                         if (inBoundary(point)||!output) {
                             energydensity[point] = newEnergyDensity[store];
                         }
                         store++;
+                        point = pos + 2*mult1 + mult2;
+                        if (inBoundary(point)||!output) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+                        store++;
+                        point = pos + mult1 + 2*mult2;
+                        if (inBoundary(point)||!output) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+                        store++;
+                        point = pos + 2*mult1 + 2*mult2;
+                        if (inBoundary(point)||!output) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+
+                        store++;
                         point = pos - mult1 - mult2;
+                        if (inBoundary(point)||!output) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+                        store++;
+                        point = pos - 2*mult1 - mult2;
+                        if (inBoundary(point)||!output) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+                        store++;
+                        point = pos - mult1 - 2*mult2;
+                        if (inBoundary(point)||!output) {
+                            energydensity[point] = newEnergyDensity[store];
+                        }
+                        store++;
+                        point = pos - 2*mult1 - 2*mult2;
                         if (inBoundary(point)||!output) {
                             energydensity[point] = newEnergyDensity[store];
                         }
@@ -1669,14 +1900,47 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                                 energydensity[point] = newEnergyDensity[store];
                             }
                             store++;
+                            point = pos + 2*mult1 - mult2;
+                            if (inBoundary(point)||!output) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+                            store++;
+                            point = pos + mult1 - 2*mult2;
+                            if (inBoundary(point)||!output) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+                            store++;
+                            point = pos + 2*mult1 - 2*mult2;
+                            if (inBoundary(point)||!output) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+
+
+
+                            store++;
                             point = pos - mult1 + mult2;
+                            if (inBoundary(point)||!output) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+                            store++;
+                            point = pos - 2*mult1 + mult2;
+                            if (inBoundary(point)||!output) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+                            store++;
+                            point = pos - mult1 + 2*mult2;
+                            if (inBoundary(point)||!output) {
+                                energydensity[point] = newEnergyDensity[store];
+                            }
+                            store++;
+                            point = pos - 2*mult1 + 2*mult2;
                             if (inBoundary(point)||!output) {
                                 energydensity[point] = newEnergyDensity[store];
                             }
                         }
                         mult2 *= size[j];
                     }
-                mult1 *= size[i];
+                    mult1 *= size[i];
                 }
 
                 }
@@ -1708,6 +1972,7 @@ bool BaseFieldTheory::annealing(int iterations, int often, int often_cut, bool o
                 }
                 #pragma omp barrier
                 }
+                #pragma omp barrier
                 #pragma omp master
                 {
                 no++;
@@ -1881,13 +2146,63 @@ inline T  BaseFieldTheory::single_derivative(Field<T> * f, int wrt, int &point) 
         for (int i = 1; i <= wrt; i++) {
             mult *= size[i - 1];
         }
+        int dpos = convert(point)[wrt];
+        if((boundarytype[2*wrt] == 0 && boundarytype[2*wrt+1] == 0) || (dpos+2 < size[wrt] && dpos-2 >= 0) ) {
+            return (-1.0 * f->data[point + 2 * mult] + 8.0 * f->data[point + mult] - 8.0 * f->data[point - mult] +
+                    f->data[point - 2 * mult]) / (12.0 * spacing[wrt]);
+        }else if(f->boundarytype[2*wrt] == 1) { //periodic conditions
+                if(dpos - 2 <0){
+                    if(dpos - 1 <0){
+                        return (-1.0 * f->data[point + 2 * mult] + 8.0 * f->data[point + mult] - 8.0 * f->data[point + (size[wrt]-1)*mult] +
+                                f->data[point + (size[wrt]-2)*mult]) / (12.0 * spacing[wrt]);
+                    }else{
+                        return (-1.0 * f->data[point + 2 * mult] + 8.0 * f->data[point + mult] - 8.0 * f->data[point - mult] +
+                                f->data[point + (size[wrt]-2)*mult]) / (12.0 * spacing[wrt]);
+                    }
+                }
+                else{
+                    if(dpos + 1 >= size[wrt]){
+                        return (-1.0 * f->data[point - (size[wrt]-2)*mult] + 8.0 * f->data[point - (size[wrt]-1)*mult] - 8.0 * f->data[point - mult] +
+                                f->data[point - 2 * mult]) / (12.0 * spacing[wrt]);
+                    }else{
+                        return (-1.0 * f->data[point - (size[wrt]-2)*mult] + 8.0 * f->data[point + mult] - 8.0 * f->data[point - mult] +
+                                f->data[point - 2 * mult]) / (12.0 * spacing[wrt]);
+                    }
+                }
+            }
+            else if(f->boundarytype[2*wrt] == 4){ //periodic and transform in 2d conditions
+                int wind_dir;
+                double windpos;
+                if(wrt == 0){windpos = convert(point)[1];wind_dir = 1;}
+                else{windpos = convert(point)[0];wind_dir = 0;}
+            double winding;
+            if(f->boundarymorphtype==1){winding = f->getBoundaryConstant()*2.0*M_PI/(spacing[wind_dir]*(size[wind_dir]));}
+            else {winding = f->getBoundaryConstant()*2.0*M_PI*windpos/(size[wind_dir]);}
+                if(dpos - 2 <0){
+                    if(dpos - 1 <0){
+                        return (-1.0 * f->data[point + 2 * mult] + 8.0 * f->data[point + mult] - 8.0 * f->rotate(point + (size[wrt]-1)*mult,-winding) +
+                            f->rotate(point + (size[wrt]-2)*mult,-winding)) / (12.0 * spacing[wrt]);
+                    }else{
+                        return (-1.0 * f->data[point + 2 * mult] + 8.0 * f->data[point + mult] - 8.0 * f->data[point - mult] +
+                            f->rotate(point + (size[wrt]-2)*mult,-winding)) / (12.0 * spacing[wrt]);
+                    }
+                }
+                else{
+                    if(dpos + 1 >= size[wrt]){
+                        return (-1.0 * f->rotate(point - (size[wrt]-2)*mult,winding) + 8.0 * f->rotate(point - (size[wrt]-1)*mult,winding) - 8.0 * f->data[point - mult] +
+                            f->data[point - 2 * mult]) / (12.0 * spacing[wrt]);
+                    }else{
+                        return (-1.0 * f->rotate(point - (size[wrt]-2)*mult,winding) + 8.0 * f->data[point + mult] - 8.0 * f->data[point - mult] +
+                            f->data[point - 2 * mult]) / (12.0 * spacing[wrt]);
+                    }
+                }
 
-        return (-1.0 * f->data[point + 2 * mult] + 8.0 * f->data[point + mult] - 8.0 * f->data[point - mult] +
-                f->data[point - 2 * mult]) / (12.0 * spacing[wrt]);
+            }
+            else{return 0.0*f->data[point];}
+        }
     }
     /*for(int i = 0; i < dim; i++){ if(i == wrt){dir[i] = 1;}else{dir[i] = 0;}};
     return (-1.0*f->getData(pos+2*dir) + 8.0*f->getData(pos+dir) - 8.0*f->getData(pos-dir) + f->getData(pos-2*dir))/(12.0*spacing[wrt]);*/
-}
 
 template <class T>
 inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, int &point) {
@@ -1903,10 +2218,59 @@ inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, i
             for (int i = 1; i <= wrt1; i++) {
                 mult *= size[i - 1];
             }
-
-            return (-1.0 * f->data[point + 2 * mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
-                    16.0 * f->data[point - mult]
-                    - f->data[point - 2 * mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+            int dpos = convert(point)[wrt1];
+            if((boundarytype[2*wrt1] == 0 && boundarytype[2*wrt1+1] == 0) || (dpos+2 < size[wrt1] && dpos-2 >= 0) ) {
+                return (-1.0 * f->data[point + 2 * mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                        16.0 * f->data[point - mult]
+                        - f->data[point - 2 * mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+            }else if(f->boundarytype[2*wrt1] == 1){ //periodic conditions
+                    if(dpos - 2 <0){
+                        if(dpos - 1 <0){
+                            return (-1.0 * f->data[point + 2 * mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                                    16.0 * f->data[point + (size[wrt1]-1)*mult] - f->data[point + (size[wrt1]-2)*mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                        }else{
+                            return (-1.0 * f->data[point + 2 * mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                                    16.0 * f->data[point - mult] - f->data[point + (size[wrt1]-2)*mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                        }
+                    }
+                    else{
+                        if(dpos + 1 >= size[wrt1]){
+                            return (-1.0 * f->data[point - (size[wrt1]-2)*mult] + 16.0 * f->data[point - (size[wrt1]-1)*mult] - 30.0 * f->data[point] +
+                                    16.0 * f->data[point - mult] - f->data[point - 2 * mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                        }else{
+                            return (-1.0 * f->data[point - (size[wrt1]-2)*mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                                    16.0 * f->data[point - mult] - f->data[point - 2 * mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                        }
+                    }
+                }
+            else if(f->boundarytype[2*wrt1] == 4){ //periodic conditions with winding in 2d
+                int wind_dir;
+                double windpos;
+                if(wrt1 == 0){windpos = convert(point)[1];wind_dir = 1;}
+                else{windpos = 0.0;}//convert(point)[0];wind_dir = 0;}
+                double winding;
+                if(f->boundarymorphtype==1){winding = f->getBoundaryConstant()*2.0*M_PI/(spacing[wind_dir]*(size[wind_dir]));}
+                else {winding = f->getBoundaryConstant()*2.0*M_PI*windpos/(size[wind_dir]);}
+                if(dpos - 2 <0){
+                    if(dpos - 1 <0){
+                        return (-1.0 * f->data[point + 2 * mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                                16.0 * f->rotate(point + (size[wrt1]-1)*mult,-winding) - f->rotate(point + (size[wrt1]-2)*mult,-winding)) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                    }else{
+                        return (-1.0 * f->data[point + 2 * mult] + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                                16.0 * f->data[point - mult] - f->rotate(point + (size[wrt1]-2)*mult,-winding)) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                    }
+                }
+                else{
+                    if(dpos + 1 >= size[wrt1]){
+                        return (-1.0 * f->rotate(point - (size[wrt1]-2)*mult,winding) + 16.0 * f->rotate(point - (size[wrt1]-1)*mult,winding) - 30.0 * f->data[point] +
+                                16.0 * f->data[point - mult] - f->data[point - 2 * mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                    }else{
+                        return (-1.0 * f->rotate(point - (size[wrt1]-2)*mult,winding) + 16.0 * f->data[point + mult] - 30.0 * f->data[point] +
+                                16.0 * f->data[point - mult] - f->data[point - 2 * mult]) / (12.0 * spacing[wrt1] * spacing[wrt1]);
+                    }
+                }
+            }
+                else{return 0.0*f->data[point];}
 
             /*for(int i = 0; i < dim; i++){ if(i == wrt1){dir[i] = 1;}else{dir[i] = 0;}};
             return (-1.0*f->getData(pos+2*dir) + 16.0*f->getData(pos+dir) - 30.0*f->getData(pos) + 16.0*f->getData(pos-dir)
@@ -1925,21 +2289,248 @@ inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, i
                     if (i == wrt1) { mult1 = mult2; }
                 }
             }
-
+            int dpos1 = convert(point)[wrt1];
+            int dpos2 = convert(point)[wrt2];
 
             int doub = mult1 + mult2;
             int alt = mult1 - mult2;
+            if((boundarytype[2*wrt1] == 0 && boundarytype[2*wrt1+1] == 0 && boundarytype[2*wrt2]==0 && boundarytype[2*wrt2+1]==0) || (dpos1+2 < size[wrt1] && dpos1-2 >= 0 && dpos2+2 < size[wrt2] && dpos2-2 >= 0) )
+            {
+                return (f->data[point + 2 * doub] - 8.0 * f->data[point + mult1 + 2 * mult2] +
+                        8.0 * f->data[point - mult1 + 2 * mult2]
+                        - f->data[point - 2 * alt] - 8.0 * f->data[point + 2 * mult1 + mult2] +
+                        64.0 * f->data[point + doub]
+                        - 64.0 * f->data[point - alt] + 8.0 * f->data[point - 2 * mult1 + mult2] +
+                        8.0 * f->data[point + 2 * mult1 - mult2]
+                        - 64.0 * f->data[point + alt] + 64.0 * f->data[point - doub] -
+                        8.0 * f->data[point - 2 * mult1 - mult2]
+                        - f->data[point + 2 * alt] + 8.0 * f->data[point + mult1 - 2 * mult2] -
+                        8.0 * f->data[point - mult1 - 2 * mult2]
+                        + f->data[point - 2 * doub]) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+            }
+            else if(f->boundarytype[2 * wrt1] != 4 && f->boundarytype[2 * wrt2] != 4){
+                double mult1m1, mult1m2, mult1p1, mult1p2, mult2m1, mult2m2, mult2p1, mult2p2;
+                if ((f->boundarytype[2 * wrt1] == 1 && dpos1 - 2 < 0) ||
+                    (f->boundarytype[2 * wrt1 + 1] == 1 && dpos1 + 2 >= size[wrt1])) { //periodic conditions for wrt1
+                    if (dpos1 - 1 < 0) {
+                        mult1m1 = (size[wrt1] - 1) * mult1;
+                        mult1m2 = (size[wrt1] - 2) * mult1;
+                        mult1p1 = mult1;
+                        mult1p2 = 2 * mult1;
+                    } else if (dpos1 - 2 < 0) {
+                        mult1m1 = -mult1;
+                        mult1m2 = (size[wrt1] - 2) * mult1;
+                        mult1p1 = mult1;
+                        mult1p2 = 2 * mult1;
+                    } else if (dpos1 + 1 >= size[wrt1]) {
+                        mult1m1 = -mult1;
+                        mult1m2 = -2 * mult1;
+                        mult1p1 = -(size[wrt1] - 1) * mult1;
+                        mult1p2 = -(size[wrt1] - 2) * mult1;
+                    } else if (dpos1 + 2 >= size[wrt1]) {
+                        mult1m1 = -mult1;
+                        mult1m2 = -2 * mult1;
+                        mult1p1 = mult1;
+                        mult1p2 = -(size[wrt1] - 2) * mult1;
+                    }
+                } else {
+                    mult1m1 = -mult1;
+                    mult1m2 = -2 * mult1;
+                    mult1p1 = mult1;
+                    mult1p2 = 2 * mult1;
+                }
+                if ((f->boundarytype[2 * wrt2] == 1 && dpos2 - 2 < 0) ||
+                    (f->boundarytype[2 * wrt2 + 1] == 1 && dpos2 + 2 >= size[wrt2])) { //periodic conditions for wrt1
+                    if (dpos2 - 1 < 0) {
+                        mult2m1 = (size[wrt2] - 1) * mult2;
+                        mult2m2 = (size[wrt2] - 2) * mult2;
+                        mult2p1 = mult2;
+                        mult2p2 = 2 * mult2;
+                    } else if (dpos2 - 2 < 0) {
+                        mult2m1 = -mult2;
+                        mult2m2 = (size[wrt2] - 2) * mult2;
+                        mult2p1 = mult2;
+                        mult2p2 = 2 * mult2;
+                    } else if (dpos2 + 1 >= size[wrt2]) {
+                        mult2m1 = -mult2;
+                        mult2m2 = -2 * mult2;
+                        mult2p1 = -(size[wrt2] - 1) * mult2;
+                        mult2p2 = -(size[wrt2] - 2) * mult2;
+                    } else if (dpos2 + 2 >= size[wrt2]) {
+                        mult2m1 = -mult2;
+                        mult2m2 = -2 * mult2;
+                        mult2p1 = mult2;
+                        mult2p2 = -(size[wrt2] - 2) * mult2;
+                    }
+                } else {
+                    mult2m1 = -mult2;
+                    mult2m2 = -2 * mult2;
+                    mult2p1 = mult2;
+                    mult2p2 = 2 * mult2;
+                }
+                return (f->data[point + mult1p2 + mult2p2] - 8.0 * f->data[point + mult1p1 + mult2p2] +
+                        8.0 * f->data[point + mult1m1 + mult2p2]
+                        - f->data[point + mult1m2 + mult2p2] - 8.0 * f->data[point + mult1p2 + mult2p1] +
+                        64.0 * f->data[point + mult1p1 + mult2p1]
+                        - 64.0 * f->data[point + mult1m1 + mult2p1] + 8.0 * f->data[point + mult1m2 + mult2p1] +
+                        8.0 * f->data[point + mult1p2 + mult2m1]
+                        - 64.0 * f->data[point + mult1p1 + mult2m1] + 64.0 * f->data[point + mult1m1 + mult2m1] -
+                        8.0 * f->data[point + mult1m2 + mult2m1]
+                        - f->data[point + mult1p2 + mult2m2] + 8.0 * f->data[point + mult1p1 + mult2m2] -
+                        8.0 * f->data[point + mult1m1 + mult2m2]
+                        + f->data[point + mult1m2 + mult2m2]) / (144.0 * spacing[wrt1] * spacing[wrt2]);
 
-            return (f->data[point + 2 * doub] - 8.0 * f->data[point + mult1 + 2 * mult2] +
-                    8.0 * f->data[point - mult1 + 2 * mult2]
-                    - f->data[point - 2 * alt] - 8.0 * f->data[point + 2 * mult1 + mult2] + 64.0 * f->data[point + doub]
-                    - 64.0 * f->data[point - alt] + 8.0 * f->data[point - 2 * mult1 + mult2] +
-                    8.0 * f->data[point + 2 * mult1 - mult2]
-                    - 64.0 * f->data[point + alt] + 64.0 * f->data[point - doub] -
-                    8.0 * f->data[point - 2 * mult1 - mult2]
-                    - f->data[point + 2 * alt] + 8.0 * f->data[point + mult1 - 2 * mult2] -
-                    8.0 * f->data[point - mult1 - 2 * mult2]
-                    + f->data[point - 2 * doub]) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+            } else{
+
+
+                double mult1m1, mult1m2, mult1p1, mult1p2, mult2m1, mult2m2, mult2p1, mult2p2;
+                if(f->boundarytype[2 * wrt2] == 4){
+                    int buffer = wrt1;
+                    wrt1 = wrt2;
+                    wrt2 = buffer;
+                    buffer = mult1;
+                    mult1 = mult2;
+                    mult2 = buffer;
+                    buffer = dpos1;
+                    dpos1 = dpos2;
+                    dpos2 = buffer;
+                }
+                int wind_dir = wrt2;
+                double windpos = dpos2;
+                double winding,windingbump;
+                if(f->boundarymorphtype==1){winding = f->getBoundaryConstant()*2.0*M_PI/(spacing[wind_dir]*(size[wind_dir]));windingbump = 0.0;}
+                else {winding = f->getBoundaryConstant()*2.0*M_PI*windpos/(size[wind_dir]); windingbump = f->getBoundaryConstant()*2.0*M_PI/(size[wind_dir]);}
+                if ((f->boundarytype[2 * wrt2] == 1 && dpos2 - 2 < 0) ||
+                    (f->boundarytype[2 * wrt2 + 1] == 1 && dpos2 + 2 >= size[wrt2])) { //periodic conditions for wrt2
+                    if (dpos2 - 1 < 0) {
+                        mult2m1 = (size[wrt2] - 1) * mult2;
+                        mult2m2 = (size[wrt2] - 2) * mult2;
+                        mult2p1 = mult2;
+                        mult2p2 = 2 * mult2;
+                    } else if (dpos2 - 2 < 0) {
+                        mult2m1 = -mult2;
+                        mult2m2 = (size[wrt2] - 2) * mult2;
+                        mult2p1 = mult2;
+                        mult2p2 = 2 * mult2;
+                    } else if (dpos2 + 1 >= size[wrt2]) {
+                        mult2m1 = -mult2;
+                        mult2m2 = -2 * mult2;
+                        mult2p1 = -(size[wrt2] - 1) * mult2;
+                        mult2p2 = -(size[wrt2] - 2) * mult2;
+                    } else if (dpos2 + 2 >= size[wrt2]) {
+                        mult2m1 = -mult2;
+                        mult2m2 = -2 * mult2;
+                        mult2p1 = mult2;
+                        mult2p2 = -(size[wrt2] - 2) * mult2;
+                    }
+                }else {
+                    mult2m1 = -mult2;
+                    mult2m2 = -2 * mult2;
+                    mult2p1 = mult2;
+                    mult2p2 = 2 * mult2;
+                }
+
+
+                if (dpos1 - 2 < 0 || dpos1 + 2 >= size[wrt1]) { //periodic conditions for wrt1
+                    if (dpos1 - 1 < 0) {
+                        mult1m1 = (size[wrt1] - 1) * mult1;
+                        mult1m2 = (size[wrt1] - 2) * mult1;
+                        mult1p1 = mult1;
+                        mult1p2 = 2 * mult1;
+
+                        return (f->data[point + mult1p2 + mult2p2] - 8.0 * f->data[point + mult1p1 + mult2p2] +
+                                8.0 * f->rotate(point + mult1m1 + mult2p2,-winding-2*windingbump)
+                                - f->rotate(point + mult1m2 + mult2p2,-winding-2*windingbump) - 8.0 * f->data[point + mult1p2 + mult2p1] +
+                                64.0 * f->data[point + mult1p1 + mult2p1]
+                                - 64.0 * f->rotate(point + mult1m1 + mult2p1,-winding-windingbump) + 8.0 * f->rotate(point + mult1m2 + mult2p1,-winding-windingbump) +
+                                8.0 * f->data[point + mult1p2 + mult2m1]
+                                - 64.0 * f->data[point + mult1p1 + mult2m1] + 64.0 * f->rotate(point + mult1m1 + mult2m1,-winding+windingbump) -
+                                8.0 * f->rotate(point + mult1m2 + mult2m1,-winding+windingbump)
+                                - f->data[point + mult1p2 + mult2m2] + 8.0 * f->data[point + mult1p1 + mult2m2] -
+                                8.0 * f->rotate(point + mult1m1 + mult2m2,-winding+2*windingbump)
+                                + f->rotate(point + mult1m2 + mult2m2,-winding+2*windingbump)) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+
+                    } else if (dpos1 - 2 < 0) {
+                        mult1m1 = -mult1;
+                        mult1m2 = (size[wrt1] - 2) * mult1;
+                        mult1p1 = mult1;
+                        mult1p2 = 2 * mult1;
+
+                        return (f->data[point + mult1p2 + mult2p2] - 8.0 * f->data[point + mult1p1 + mult2p2] +
+                                8.0 * f->data[point + mult1m1 + mult2p2]
+                                - f->rotate(point + mult1m2 + mult2p2,-winding-2*windingbump) - 8.0 * f->data[point + mult1p2 + mult2p1] +
+                                64.0 * f->data[point + mult1p1 + mult2p1]
+                                - 64.0 * f->data[point + mult1m1 + mult2p1] + 8.0 * f->rotate(point + mult1m2 + mult2p1,-winding-windingbump) +
+                                8.0 * f->data[point + mult1p2 + mult2m1]
+                                - 64.0 * f->data[point + mult1p1 + mult2m1] + 64.0 * f->data[point + mult1m1 + mult2m1] -
+                                8.0 * f->rotate(point + mult1m2 + mult2m1,-winding+windingbump)
+                                - f->data[point + mult1p2 + mult2m2] + 8.0 * f->data[point + mult1p1 + mult2m2] -
+                                8.0 * f->data[point + mult1m1 + mult2m2]
+                                + f->rotate(point + mult1m2 + mult2m2,-winding+2*windingbump)) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+
+                    } else if (dpos1 + 1 >= size[wrt1]) {
+                        mult1m1 = -mult1;
+                        mult1m2 = -2 * mult1;
+                        mult1p1 = -(size[wrt1] - 1) * mult1;
+                        mult1p2 = -(size[wrt1] - 2) * mult1;
+
+                        return (f->rotate(point + mult1p2 + mult2p2,winding+2*windingbump) - 8.0 * f->rotate(point + mult1p1 + mult2p2,winding+2*windingbump) +
+                                8.0 * f->data[point + mult1m1 + mult2p2]
+                                - f->data[point + mult1m2 + mult2p2] - 8.0 * f->rotate(point + mult1p2 + mult2p1,winding+windingbump) +
+                                64.0 * f->rotate(point + mult1p1 + mult2p1,winding+windingbump)
+                                - 64.0 * f->data[point + mult1m1 + mult2p1] + 8.0 * f->data[point + mult1m2 + mult2p1] +
+                                8.0 * f->rotate(point + mult1p2 + mult2m1,winding-windingbump)
+                                - 64.0 * f->rotate(point + mult1p1 + mult2m1,winding-windingbump) + 64.0 * f->data[point + mult1m1 + mult2m1] -
+                                8.0 * f->data[point + mult1m2 + mult2m1]
+                                - f->rotate(point + mult1p2 + mult2m2,winding-2*windingbump) + 8.0 * f->rotate(point + mult1p1 + mult2m2,winding-2*windingbump) -
+                                8.0 * f->data[point + mult1m1 + mult2m2]
+                                + f->data[point + mult1m2 + mult2m2]) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+
+                    } else if (dpos1 + 2 >= size[wrt1]) {
+                        mult1m1 = -mult1;
+                        mult1m2 = -2 * mult1;
+                        mult1p1 = mult1;
+                        mult1p2 = -(size[wrt1] - 2) * mult1;
+
+                        return (f->rotate(point + mult1p2 + mult2p2,winding+2*windingbump) - 8.0 * f->data[point + mult1p1 + mult2p2] +
+                                8.0 * f->data[point + mult1m1 + mult2p2]
+                                - f->data[point + mult1m2 + mult2p2] - 8.0 * f->rotate(point + mult1p2 + mult2p1,winding+windingbump) +
+                                64.0 * f->data[point + mult1p1 + mult2p1]
+                                - 64.0 * f->data[point + mult1m1 + mult2p1] + 8.0 * f->data[point + mult1m2 + mult2p1] +
+                                8.0 * f->rotate(point + mult1p2 + mult2m1,winding-windingbump)
+                                - 64.0 * f->data[point + mult1p1 + mult2m1] + 64.0 * f->data[point + mult1m1 + mult2m1] -
+                                8.0 * f->data[point + mult1m2 + mult2m1]
+                                - f->rotate(point + mult1p2 + mult2m2,winding-2*windingbump) + 8.0 * f->data[point + mult1p1 + mult2m2] -
+                                8.0 * f->data[point + mult1m1 + mult2m2]
+                                + f->data[point + mult1m2 + mult2m2]) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+
+                    }
+                }else {
+                    mult1m1 = -mult1;
+                    mult1m2 = -2 * mult1;
+                    mult1p1 = mult1;
+                    mult1p2 = 2 * mult1;
+
+                    return (f->data[point + mult1p2 + mult2p2] - 8.0 * f->data[point + mult1p1 + mult2p2] +
+                            8.0 * f->data[point + mult1m1 + mult2p2]
+                            - f->data[point + mult1m2 + mult2p2] - 8.0 * f->data[point + mult1p2 + mult2p1] +
+                            64.0 * f->data[point + mult1p1 + mult2p1]
+                            - 64.0 * f->data[point + mult1m1 + mult2p1] + 8.0 * f->data[point + mult1m2 + mult2p1] +
+                            8.0 * f->data[point + mult1p2 + mult2m1]
+                            - 64.0 * f->data[point + mult1p1 + mult2m1] + 64.0 * f->data[point + mult1m1 + mult2m1] -
+                            8.0 * f->data[point + mult1m2 + mult2m1]
+                            - f->data[point + mult1p2 + mult2m2] + 8.0 * f->data[point + mult1p1 + mult2m2] -
+                            8.0 * f->data[point + mult1m1 + mult2m2]
+                            + f->data[point + mult1m2 + mult2m2]) / (144.0 * spacing[wrt1] * spacing[wrt2]);
+
+                }
+
+
+
+
+
+            }
+            }
 
             // old function (much slower!)
             /*return (f->getData(pos+2*dir1+2*dir2) - 8.0*f->getData(pos+dir1+2*dir2) + 8.0*f->getData(pos-dir1+2*dir2)
@@ -1951,7 +2542,6 @@ inline T  BaseFieldTheory::double_derivative(Field<T> * f, int wrt1, int wrt2, i
 
         }
     }
-}
 
 void BaseFieldTheory::updateEnergy() {
     if (dynamic) {
@@ -2022,6 +2612,7 @@ inline void BaseFieldTheory::RK4calc(int i){
 
 
     void BaseFieldTheory::gradientFlow(int iterations, int often){
+        if(!normalise_me){cout << "WARNING! - all normalisation is currently removed for his theory, alter normalsie_me value on initialisation to change!\n";}
     if(dynamic){
         cout << "Warning! You have run gradient flow on a dynamic theory, this will kill the kinetic componenet!\n";
         for(int i = 0; i < getTotalSize(); i++){
@@ -2040,7 +2631,7 @@ inline void BaseFieldTheory::RK4calc(int i){
         #pragma omp master
         {
             fields.update_gradients(dt);
-            fields.normalise();
+            if(normalise_me){fields.normalise();}
             no += 1;
             sum = 0.0;
         }
@@ -2053,18 +2644,29 @@ inline void BaseFieldTheory::RK4calc(int i){
             }
         }
         #pragma omp barrier
-
         #pragma omp master
         {
             double newenergy = sum * getTotalSpacing();
-            if(newenergy >= energy+0.0000001){dt = dt*0.5; cout << "CUTTING! due to - " << newenergy << " " << energy << "\n";}
+            if(newenergy >= energy+0.00000000001){dt = dt*0.5; cout << "CUTTING! due to - " << newenergy << " " << energy << "\n";}
             energy = newenergy;
             if (no % often == 0) {
-                cout << "Energy is " << energy <<"\n";
+                cout << "Energy is " << energy << "\n";
+                dt = dt * 1.2;
             }
+            correctTheory(no);
         }
     }
 }
+
+    void BaseFieldTheory::correctTheory(int loop){
+        gradientCorrections(loop);
+
+    }
+
+    void BaseFieldTheory::gradientCorrections(int loop){
+        cout << "[ERROR!] - gradient corrections function should be overitten or write a flow for it here!\n";
+
+    }
 
 inline vector<int> BaseFieldTheory::next(vector<int> current){
     for(int i = 0; i < dim; i++){
@@ -2190,6 +2792,22 @@ void BaseFieldTheory::plotEnergy() {
     }
 
 }
+
+    void BaseFieldTheory::plotCharge() {
+        if(dim == 2){
+            plot2D(size, chargedensity);
+        }
+        if(dim == 3){
+            double isovalue = -1.0;
+            for(int i = 0; i < getTotalSize(); i++) {
+                if(chargedensity[i] > isovalue){
+                    isovalue = chargedensity[i];
+                }
+            }
+            plot3D(size, chargedensity , isovalue/2.0);
+        }
+
+    }
 
 }
 
